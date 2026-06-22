@@ -89,9 +89,14 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div style={{ background: '#fff', borderRadius: '18px 18px 0 0', width: '100%', maxWidth: '640px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} className="slide-up">
         <div style={{ width: 40, height: 4, background: '#D1DDD4', borderRadius: 2, margin: '12px auto 0', flexShrink: 0 }} />
-        <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid #EAF0EC', flexShrink: 0 }}>
-          <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '18px', color: '#1B3A2D', fontWeight: 800 }}>Invoice / Bill</div>
-          <div style={{ fontSize: '12px', color: '#718096' }}>Preview before downloading</div>
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid #EAF0EC', flexShrink: 0 }}>
+          <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '16px', color: '#1B3A2D', fontWeight: 800, marginBottom: '10px' }}>Invoice / Bill</div>
+          {/* Action buttons at the top */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={downloadBill} style={btnGreen}>⬇ Download</button>
+            <button onClick={shareBill} style={btnGold}>Share</button>
+            <button onClick={onClose} style={btnOutline}>Close</button>
+          </div>
         </div>
 
         <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1 }}>
@@ -177,12 +182,6 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
             </div>
           </div>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button onClick={downloadBill} style={btnGreen}>⬇ Download PDF</button>
-            <button onClick={shareBill} style={btnGold}>📤 Share</button>
-            <button onClick={onClose} style={btnOutline}>Close</button>
-          </div>
         </div>
       </div>
     </div>

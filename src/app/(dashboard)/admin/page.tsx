@@ -126,6 +126,15 @@ export default function AdminPage() {
     loadPartners()
   }
 
+  async function deletePartner(p: Partner) {
+    if (!confirm(`Permanently delete "${p.name}"? This cannot be undone.`)) return
+    const res = await fetch(`/api/partners/${p.id}`, { method: 'DELETE' })
+    const data = await res.json()
+    if (!res.ok) { showToast(data.error ?? 'Error deleting partner'); return }
+    showToast(`Partner "${p.name}" deleted`)
+    loadPartners()
+  }
+
   return (
     <>
       <div>
@@ -301,12 +310,21 @@ export default function AdminPage() {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => togglePartner(p)}
-                      style={{ background: p.active ? '#FDECEA' : '#E6F5EC', color: p.active ? '#C0392B' : '#1E7E4E', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', flexShrink: 0 }}
-                    >
-                      {p.active ? 'Deactivate' : 'Activate'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <button
+                        onClick={() => togglePartner(p)}
+                        style={{ background: p.active ? '#FDECEA' : '#E6F5EC', color: p.active ? '#C0392B' : '#1E7E4E', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+                      >
+                        {p.active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button
+                        onClick={() => deletePartner(p)}
+                        style={{ background: '#fff', color: '#C0392B', border: '1.5px solid #C0392B', borderRadius: '6px', padding: '6px 10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+                        title="Delete partner"
+                      >
+                        🗑
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

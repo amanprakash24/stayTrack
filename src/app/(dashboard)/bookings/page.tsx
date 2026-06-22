@@ -30,6 +30,7 @@ export default function BookingsPage() {
   const [payLoading, setPayLoading] = useState(false)
   const [toast, setToast] = useState('')
   const [showBill, setShowBill] = useState(false)
+  const [billBooking, setBillBooking] = useState<Booking | null>(null)
   const [locations, setLocations] = useState<string[]>([])
   const [locFilter, setLocFilter] = useState('')
 
@@ -60,6 +61,14 @@ export default function BookingsPage() {
     const data = await res.json()
     setSelected(data)
     setPayAmt('')
+  }
+
+  async function quickBill(b: Booking, e: React.MouseEvent) {
+    e.stopPropagation()
+    const res = await fetch(`/api/bookings/${b.id}`)
+    const data = await res.json()
+    setBillBooking(data)
+    setShowBill(true)
   }
 
   async function addPayment(markFull = false) {
@@ -164,9 +173,17 @@ export default function BookingsPage() {
                   </div>
                   <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>{getPlanLabel(b.planType)}</div>
                 </div>
-                <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>
-                  {statusLabel(b.status)}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                  <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>
+                    {statusLabel(b.status)}
+                  </span>
+                  <button
+                    onClick={e => quickBill(b, e)}
+                    style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, background: '#FDF6E3', color: '#C9A84C', border: '1px solid #C9A84C', cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}
+                  >
+                    🧾 Bill
+                  </button>
+                </div>
               </div>
               <div style={{ borderTop: '1px solid #EAF0EC', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', gap: '16px' }}>
@@ -186,14 +203,21 @@ export default function BookingsPage() {
         <div style={overlay} onClick={e => e.target === e.currentTarget && setSelected(null)}>
           <div style={modal} className="slide-up">
             <div style={{ width: 40, height: 4, background: '#D1DDD4', borderRadius: 2, margin: '12px auto 0' }} />
-            <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid #EAF0EC' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '18px', color: '#1B3A2D', fontWeight: 800 }}>{selected.guestName}</div>
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid #EAF0EC' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div>
+                  <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '17px', color: '#1B3A2D', fontWeight: 800 }}>{selected.guestName}</div>
+                  <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>{selected.hotel.name} · {selected.hotel.location}</div>
+                </div>
                 <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: statusColor(selected.status).bg, color: statusColor(selected.status).color }}>
                   {statusLabel(selected.status)}
                 </span>
               </div>
-              <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>{selected.hotel.name} · {selected.hotel.location}</div>
+              {/* Action buttons at the top */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setShowBill(true)} style={btnGold}>🧾 Generate Bill</button>
+                <button onClick={() => setSelected(null)} style={btnOutline}>Close</button>
+              </div>
             </div>
 
             <div style={{ padding: '16px 20px', overflowY: 'auto', maxHeight: 'calc(92vh - 80px)' }}>
@@ -275,20 +299,20 @@ export default function BookingsPage() {
                 </div>
               ))}
 
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '20px' }}>
-                <button onClick={() => setShowBill(true)} style={btnGold}>🧾 Generate Bill</button>
-                <button onClick={() => setSelected(null)} style={btnOutline}>Close</button>
-              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* Bill Modal */}
-      {showBill && selected && (
-        <BillModal booking={selected} paid={paid} pending={pending} onClose={() => setShowBill(false)} />
-      )}
+      {showBill && (billBooking ?? selected) && (() => {
+        const bk = (billBooking ?? selected)!
+        const p = totalPaid(bk.advance, bk.payments)
+        const pend = Math.max(0, bk.totalCost - p)
+        return (
+          <BillModal booking={bk} paid={p} pending={pend} onClose={() => { setShowBill(false); setBillBooking(null) }} />
+        )
+      })()}
 
       {/* Toast */}
       {toast && (
