@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
 interface User { id: string; name: string; role: string; location?: string | null }
@@ -8,6 +8,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
@@ -48,37 +60,57 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '20px', fontWeight: 800, letterSpacing: '-0.5px' }}>
           Stay<span style={{ color: '#C9A84C' }}>Track</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {user && (
-            <div style={{
-              background: 'rgba(201,168,76,0.2)',
-              border: '1px solid #C9A84C',
-              color: '#C9A84C',
-              borderRadius: '20px',
-              padding: '4px 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-            }}>
-              {user.name}{user.location ? ` · ${user.location}` : ''}
-              {user.role === 'SUPERADMIN' ? ' · Admin' : ''}
-            </div>
-          )}
-          <button
-            onClick={logout}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#fff',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              fontSize: '12px',
-              cursor: 'pointer',
-              fontFamily: 'Inter, sans-serif',
-            }}
-          >
-            Sign out
-          </button>
-        </div>
+        {user && (
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            {/* Avatar button */}
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              style={{
+                width: '36px', height: '36px', borderRadius: '50%',
+                background: '#C9A84C', border: '2px solid rgba(201,168,76,0.4)',
+                color: '#1B3A2D', fontFamily: 'Syne, sans-serif',
+                fontSize: '14px', fontWeight: 800,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+            </button>
+
+            {/* Dropdown */}
+            {menuOpen && (
+              <div style={{
+                position: 'absolute', top: '44px', right: 0,
+                background: '#fff', borderRadius: '10px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                border: '1px solid #D1DDD4',
+                minWidth: '180px', zIndex: 200, overflow: 'hidden',
+              }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #EAF0EC' }}>
+                  <div style={{ fontWeight: 700, fontSize: '13px', color: '#1B3A2D' }}>{user.name}</div>
+                  <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>
+                    {user.role === 'SUPERADMIN' ? 'Super Admin' : 'Partner'}
+                    {user.location ? ` · ${user.location}` : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setMenuOpen(false); logout() }}
+                  style={{
+                    width: '100%', padding: '11px 16px', textAlign: 'left',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: '13px', fontWeight: 600, color: '#C0392B',
+                    fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '8px',
+                  }}
+                >
+                  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+                  </svg>
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main content */}
