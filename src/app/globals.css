@@ -1,26 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap');
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-pine:          #1B3A2D;
+  --color-pine-light:    #2A5441;
+  --color-mist:          #EAF0EC;
+  --color-gold:          #C9A84C;
+  --color-gold-light:    #F5E9C8;
+  --color-slate:         #4A5568;
+  --color-slate-light:   #718096;
+  --color-bg:            #F4F7F5;
+  --color-danger:        #C0392B;
+  --color-danger-light:  #FDECEA;
+  --color-success:       #1E7E4E;
+  --color-success-light: #E6F5EC;
+  --color-warning:       #B7791F;
+  --color-warning-light: #FEFCE8;
+  --color-border:        #D1DDD4;
+  --color-card:          #FFFFFF;
+  --font-inter:          'Inter', sans-serif;
+  --font-syne:           'Syne', sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+  background: #F4F7F5;
+  color: #1A2E22;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1DDD4; border-radius: 2px; }
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.slide-up { animation: slideUp 0.25s ease; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in { animation: fadeIn 0.2s ease; }

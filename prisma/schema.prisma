@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPERADMIN
+  PARTNER
+}
+
+enum PlanType {
+  AP
+  MAP
+  CP
+  EP
+  LODGING
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  password  String
+  role      Role     @default(PARTNER)
+  location  String?
+  hotelId   String?
+  hotel     Hotel?   @relation(fields: [hotelId], references: [id])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings  Booking[]
+  payments  Payment[]
+  auditLogs AuditLog[]
+}
+
+model Hotel {
+  id          String   @id @default(cuid())
+  name        String
+  location    String
+  totalRooms  Int
+  managerName String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bookings Booking[]
+  partners User[]
+}
+
+model Booking {
+  id         String        @id @default(cuid())
+  bookingRef String        @unique
+
+  guestName String
+  phone     String
+  email     String?
+  address   String?
+
+  hotelId  String
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  checkin  DateTime
+  checkout DateTime
+
+  planType    PlanType
+  guests      Int
+  rooms       Int
+  ratePerUnit Float
+  subtotal    Float
+  taxPercent  Float         @default(0)
+  taxAmount   Float         @default(0)
+  totalCost   Float
+
+  advance Float         @default(0)
+  status  PaymentStatus @default(PENDING)
+
+  notes String?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  payments  Payment[]
+  auditLogs AuditLog[]
+}
+
+model Payment {
+  id        String  @id @default(cuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  amount       Float
+  note         String?
+  recordedById String
+  recordedBy   User     @relation(fields: [recordedById], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  action    String
+  createdAt DateTime @default(now())
+}
