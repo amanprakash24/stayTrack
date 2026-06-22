@@ -1,13 +1,23 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const router = useRouter()
+  const [partnerNames, setPartnerNames] = useState<string[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
+  const [showPwd, setShowPwd] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/auth/partners-list')
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setPartnerNames(d) })
+      .catch(() => {})
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -30,6 +40,20 @@ export default function LoginPage() {
     }
   }
 
+  function switchToAdmin() {
+    setIsAdmin(true)
+    setName('')
+    setPassword('')
+    setError('')
+  }
+
+  function switchToPartner() {
+    setIsAdmin(false)
+    setName('')
+    setPassword('')
+    setError('')
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -42,7 +66,7 @@ export default function LoginPage() {
       <div style={{
         background: '#fff',
         borderRadius: '18px',
-        padding: '48px 40px',
+        padding: '40px 36px',
         width: '100%',
         maxWidth: '400px',
         boxShadow: '0 8px 32px rgba(27,58,45,0.18)',
@@ -50,32 +74,75 @@ export default function LoginPage() {
         <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '28px', color: '#1B3A2D', marginBottom: '4px', fontWeight: 800 }}>
           Stay<span style={{ color: '#C9A84C' }}>Track</span>
         </div>
-        <div style={{ color: '#718096', fontSize: '13px', marginBottom: '32px' }}>
-          Hotel Booking Management · Partner Portal
+        <div style={{ color: '#718096', fontSize: '13px', marginBottom: '24px' }}>
+          Hotel Booking Management
+        </div>
+
+        {/* Mode toggle */}
+        <div style={{ display: 'flex', background: '#EAF0EC', borderRadius: '10px', padding: '4px', marginBottom: '24px' }}>
+          <button
+            type="button"
+            onClick={switchToPartner}
+            style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', background: !isAdmin ? '#1B3A2D' : 'transparent', color: !isAdmin ? '#fff' : '#718096', transition: 'all 0.15s' }}
+          >
+            Partner Login
+          </button>
+          <button
+            type="button"
+            onClick={switchToAdmin}
+            style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', background: isAdmin ? '#C9A84C' : 'transparent', color: isAdmin ? '#fff' : '#718096', transition: 'all 0.15s' }}
+          >
+            Admin Login
+          </button>
         </div>
 
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '16px' }}>
-            <label style={labelStyle}>Your Name</label>
-            <input
-              style={inputStyle}
-              type="text"
-              placeholder="Enter your name"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              autoComplete="username"
-            />
+            <label style={labelStyle}>{isAdmin ? 'Admin Username' : 'Select Your Name'}</label>
+
+            {isAdmin ? (
+              <input
+                style={inputStyle}
+                type="text"
+                placeholder="Enter admin username"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                autoComplete="username"
+                autoFocus
+              />
+            ) : (
+              <select
+                style={{ ...inputStyle, color: name ? '#1B3A2D' : '#A0AEC0' }}
+                value={name}
+                onChange={e => setName(e.target.value)}
+              >
+                <option value="">— Select your name —</option>
+                {partnerNames.map(n => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            )}
           </div>
+
           <div style={{ marginBottom: '20px' }}>
             <label style={labelStyle}>Password</label>
-            <input
-              style={inputStyle}
-              type="password"
-              placeholder="Enter password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                style={{ ...inputStyle, paddingRight: '44px' }}
+                type={showPwd ? 'text' : 'password'}
+                placeholder="Enter password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd(s => !s)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: 0, lineHeight: 1 }}
+              >
+                {showPwd ? '🙈' : '👁'}
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -89,7 +156,7 @@ export default function LoginPage() {
             disabled={loading}
             style={{
               width: '100%',
-              background: loading ? '#2A5441' : '#1B3A2D',
+              background: loading ? '#A0AEC0' : isAdmin ? '#C9A84C' : '#1B3A2D',
               color: '#fff',
               border: 'none',
               borderRadius: '10px',
@@ -132,4 +199,5 @@ const inputStyle: React.CSSProperties = {
   fontFamily: 'Inter, sans-serif',
   outline: 'none',
   background: '#fff',
+  boxSizing: 'border-box',
 }

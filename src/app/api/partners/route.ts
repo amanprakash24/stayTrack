@@ -13,7 +13,7 @@ export async function GET() {
     const partners = await prisma.user.findMany({
       where: { role: 'PARTNER' },
       select: {
-        id: true, name: true, location: true, active: true, createdAt: true,
+        id: true, name: true, location: true, active: true, createdAt: true, passwordText: true,
         hotel: { select: { id: true, name: true, location: true } },
       },
       orderBy: { createdAt: 'asc' },
@@ -49,12 +49,13 @@ export async function POST(req: NextRequest) {
       data: {
         name,
         password: hashed,
+        passwordText: password,
         role: 'PARTNER',
         location: location || null,
         hotelId: hotelId || null,
       },
       select: {
-        id: true, name: true, location: true, active: true, createdAt: true,
+        id: true, name: true, location: true, active: true, createdAt: true, passwordText: true,
         hotel: { select: { id: true, name: true, location: true } },
       },
     })

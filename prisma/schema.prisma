@@ -32,9 +32,10 @@ model User {
   password  String
   role      Role     @default(PARTNER)
   location  String?
-  hotelId   String?
-  hotel     Hotel?   @relation(fields: [hotelId], references: [id])
-  active    Boolean  @default(true)
+  hotelId      String?
+  hotel        Hotel?   @relation(fields: [hotelId], references: [id])
+  passwordText String?
+  active       Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

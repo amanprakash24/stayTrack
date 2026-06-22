@@ -24,10 +24,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   const { id } = await params
-  const { password, location, active, hotelId } = await req.json()
+  const { name, password, location, active, hotelId } = await req.json()
 
   const data: Record<string, unknown> = {}
-  if (password) data.password = await bcrypt.hash(password, 10)
+  if (name) data.name = name
+  if (password) { data.password = await bcrypt.hash(password, 10); data.passwordText = password }
   if (location !== undefined) data.location = location || null
   if (active !== undefined) data.active = active
   if (hotelId !== undefined) data.hotelId = hotelId || null
@@ -36,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     where: { id },
     data,
     select: {
-      id: true, name: true, location: true, active: true,
+      id: true, name: true, location: true, active: true, passwordText: true,
       hotel: { select: { id: true, name: true, location: true } },
     },
   })

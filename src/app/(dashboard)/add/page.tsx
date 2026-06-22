@@ -126,11 +126,11 @@ export default function AddBookingPage() {
           <div style={row2}>
             <div style={group}>
               <label style={lbl}>Check-in *</label>
-              <input style={inp} type="date" value={form.checkin} onChange={e => set('checkin', e.target.value)} />
+              <input style={{ ...inp, width: '85%' }} type="date" value={form.checkin} onChange={e => set('checkin', e.target.value)} />
             </div>
             <div style={group}>
               <label style={lbl}>Check-out *</label>
-              <input style={inp} type="date" value={form.checkout} onChange={e => set('checkout', e.target.value)} />
+              <input style={{ ...inp, width: '85%' }} type="date" value={form.checkout} onChange={e => set('checkout', e.target.value)} />
             </div>
           </div>
 

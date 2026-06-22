@@ -8,6 +8,7 @@ interface Hotel {
 }
 interface Partner {
   id: string; name: string; location?: string; active: boolean; createdAt: string;
+  passwordText?: string | null;
   hotel?: { id: string; name: string; location: string } | null
 }
 
@@ -23,6 +24,10 @@ export default function AdminPage() {
   const [hForm, setHForm] = useState({ name: '', location: '', totalRooms: '', managerName: '' })
   // Add partner form
   const [pForm, setPForm] = useState({ name: '', password: '', location: '', hotelId: '' })
+  // Edit partner
+  const [editingPartner, setEditingPartner] = useState<Partner | null>(null)
+  const [editPwd, setEditPwd] = useState('')
+  const [showPwd, setShowPwd] = useState<Record<string, boolean>>({})
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2800) }
 
@@ -132,6 +137,27 @@ export default function AdminPage() {
     const data = await res.json()
     if (!res.ok) { showToast(data.error ?? 'Error deleting partner'); return }
     showToast(`Partner "${p.name}" deleted`)
+    loadPartners()
+  }
+
+  async function savePartner() {
+    if (!editingPartner) return
+    if (!editingPartner.name) { showToast('Name is required'); return }
+    const body: Record<string, unknown> = {
+      name: editingPartner.name,
+      location: editingPartner.location || null,
+      hotelId: editingPartner.hotel?.id || null,
+    }
+    if (editPwd) body.password = editPwd
+    const res = await fetch(`/api/partners/${editingPartner.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) { showToast('Failed to save'); return }
+    showToast('Partner updated!')
+    setEditingPartner(null)
+    setEditPwd('')
     loadPartners()
   }
 
@@ -294,38 +320,73 @@ export default function AdminPage() {
               </div>
               {partners.map(p => (
                 <div key={p.id} style={{ ...hotelCard, opacity: p.active ? 1 : 0.6 }}>
-                  <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: '#1B3A2D' }}>{p.name}</div>
-                      <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>
-                        {p.location ? `📍 ${p.location} · ` : ''}
-                        <span style={{ color: p.active ? '#1E7E4E' : '#C0392B', fontWeight: 600 }}>
-                          {p.active ? 'Active' : 'Inactive'}
-                        </span>
-                        {' · '}Joined {new Date(p.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                  {editingPartner?.id === p.id ? (
+                    /* ── Inline edit mode ── */
+                    <div style={{ padding: '14px 16px' }}>
+                      <div style={group}>
+                        <label style={lbl}>Name *</label>
+                        <input style={inp} value={editingPartner.name} onChange={e => setEditingPartner(ep => ep ? { ...ep, name: e.target.value } : ep)} />
                       </div>
-                      {p.hotel && (
-                        <div style={{ fontSize: '12px', color: '#1B3A2D', fontWeight: 600, marginTop: '4px' }}>
-                          🏨 {p.hotel.name} · {p.hotel.location}
+                      <div style={group}>
+                        <label style={lbl}>Location</label>
+                        <input style={inp} value={editingPartner.location ?? ''} onChange={e => setEditingPartner(ep => ep ? { ...ep, location: e.target.value } : ep)} />
+                      </div>
+                      <div style={group}>
+                        <label style={lbl}>Associated Hotel</label>
+                        <select style={inp} value={editingPartner.hotel?.id ?? ''} onChange={e => {
+                          const h = hotels.find(h => h.id === e.target.value) ?? null
+                          setEditingPartner(ep => ep ? { ...ep, hotel: h ? { id: h.id, name: h.name, location: h.location } : null } : ep)
+                        }}>
+                          <option value="">— No hotel —</option>
+                          {hotels.filter(h => h.active).map(h => <option key={h.id} value={h.id}>{h.name} · {h.location}</option>)}
+                        </select>
+                      </div>
+                      <div style={group}>
+                        <label style={lbl}>New Password <span style={{ color: '#718096', fontWeight: 400 }}>(leave blank to keep current)</span></label>
+                        <input style={inp} type="text" placeholder="Enter new password" value={editPwd} onChange={e => setEditPwd(e.target.value)} />
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                        <button onClick={savePartner} style={btnGreen}>Save</button>
+                        <button onClick={() => { setEditingPartner(null); setEditPwd('') }} style={{ ...btnGreen, background: '#718096' }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* ── View mode ── */
+                    <div style={{ padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '14px', color: '#1B3A2D' }}>{p.name}</div>
+                          <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>
+                            {p.location ? `📍 ${p.location} · ` : ''}
+                            <span style={{ color: p.active ? '#1E7E4E' : '#C0392B', fontWeight: 600 }}>{p.active ? 'Active' : 'Inactive'}</span>
+                            {' · '}Joined {new Date(p.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                          </div>
+                          {p.hotel && <div style={{ fontSize: '12px', color: '#1B3A2D', fontWeight: 600, marginTop: '4px' }}>🏨 {p.hotel.name} · {p.hotel.location}</div>}
+                          {p.passwordText && (
+                            <div style={{ fontSize: '12px', color: '#4A5568', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ color: '#718096' }}>Password:</span>
+                              <span style={{ fontWeight: 600, letterSpacing: showPwd[p.id] ? 0 : '0.1em' }}>
+                                {showPwd[p.id] ? p.passwordText : '••••••••'}
+                              </span>
+                              <button
+                                onClick={() => setShowPwd(s => ({ ...s, [p.id]: !s[p.id] }))}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: '0 2px', lineHeight: 1 }}
+                              >
+                                {showPwd[p.id] ? '🙈' : '👁'}
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
+                          <button onClick={() => { setEditingPartner(p); setEditPwd('') }} style={{ background: '#EAF0EC', color: '#1B3A2D', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Edit</button>
+                          <button onClick={() => togglePartner(p)} style={{ background: p.active ? '#FDECEA' : '#E6F5EC', color: p.active ? '#C0392B' : '#1E7E4E', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                            {p.active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button onClick={() => deletePartner(p)} style={{ background: '#fff', color: '#C0392B', border: '1.5px solid #C0392B', borderRadius: '6px', padding: '6px 10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>🗑 Delete</button>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                      <button
-                        onClick={() => togglePartner(p)}
-                        style={{ background: p.active ? '#FDECEA' : '#E6F5EC', color: p.active ? '#C0392B' : '#1E7E4E', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
-                      >
-                        {p.active ? 'Deactivate' : 'Activate'}
-                      </button>
-                      <button
-                        onClick={() => deletePartner(p)}
-                        style={{ background: '#fff', color: '#C0392B', border: '1.5px solid #C0392B', borderRadius: '6px', padding: '6px 10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
-                        title="Delete partner"
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
 interface User { id: string; name: string; role: string; location?: string | null }
+interface BeforeInstallPromptEvent extends Event { prompt(): Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -10,16 +11,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [user, setUser] = useState<User | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [isIOS, setIsIOS] = useState(false)
+  const [showIOSHint, setShowIOSHint] = useState(false)
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false)
+        setShowIOSHint(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  useEffect(() => {
+    const ios = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase())
+    setIsIOS(ios)
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e as BeforeInstallPromptEvent) }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  async function installApp() {
+    if (isIOS) { setShowIOSHint(h => !h); return }
+    if (!installPrompt) return
+    await installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') setInstallPrompt(null)
+    setMenuOpen(false)
+  }
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
@@ -93,20 +115,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     {user.location ? ` · ${user.location}` : ''}
                   </div>
                 </div>
-                <button
-                  onClick={() => { setMenuOpen(false); logout() }}
-                  style={{
-                    width: '100%', padding: '11px 16px', textAlign: 'left',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    fontSize: '13px', fontWeight: 600, color: '#C0392B',
-                    fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '8px',
-                  }}
-                >
-                  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-                  </svg>
-                  Sign out
-                </button>
+                {(installPrompt || isIOS) && (
+                  <div style={{ borderTop: '1px solid #EAF0EC' }}>
+                    <button
+                      onClick={installApp}
+                      style={{ width: '100%', padding: '11px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#1B3A2D', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path d="M12 2v13M8 11l4 4 4-4"/><path d="M3 18v1a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1"/>
+                      </svg>
+                      Save App to Phone
+                    </button>
+                    {isIOS && showIOSHint && (
+                      <div style={{ margin: '0 16px 12px', background: '#EAF0EC', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#1B3A2D', lineHeight: 1.5 }}>
+                        Tap <strong>Share</strong> (↑) at the bottom of Safari, then tap <strong>&quot;Add to Home Screen&quot;</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div style={{ borderTop: '1px solid #EAF0EC' }}>
+                  <button
+                    onClick={() => { setMenuOpen(false); logout() }}
+                    style={{ width: '100%', padding: '11px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#C0392B', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+                    </svg>
+                    Sign out
+                  </button>
+                </div>
               </div>
             )}
           </div>
