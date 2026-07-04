@@ -175,6 +175,35 @@ export default function LoginPage() {
         <div style={{ fontSize: '11px', color: '#718096', textAlign: 'center', marginTop: '20px' }}>
           Contact admin if you forgot your password
         </div>
+
+        <div style={{ borderTop: '1px solid #EAF0EC', marginTop: '20px', paddingTop: '16px', textAlign: 'center' }}>
+          <div style={{ fontSize: '11px', color: '#718096', marginBottom: '8px' }}>
+            Staff member? View bookings without logging in
+          </div>
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/staff-view' }}
+            style={{
+              width: '100%',
+              background: '#F4F7F5',
+              color: '#1B3A2D',
+              border: '1.5px solid #D1DDD4',
+              borderRadius: '10px',
+              padding: '11px',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'Inter, sans-serif',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+          >
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            View Bookings (Staff)
+          </button>
+        </div>
       </div>
     </div>
   )
