@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSessionFromRequest } from '@/lib/auth'
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/partners-list', '/staff-view', '/api/bookings', '/api/hotels']
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/partners-list', '/staff-view', '/availability', '/api/bookings', '/api/hotels']
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
