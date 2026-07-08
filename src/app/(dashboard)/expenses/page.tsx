@@ -155,12 +155,10 @@ export default function ExpensesPage() {
         {/* Filters */}
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
           <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={{ ...inp, width: 'auto', padding: '7px 10px', fontSize: '13px' }} />
-          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', flex: 1 }}>
-            <button onClick={() => setHotelFilter('')} style={filterBtn(!hotelFilter)}>All Hotels</button>
-            {hotels.map(h => (
-              <button key={h.id} onClick={() => setHotelFilter(h.id)} style={filterBtn(hotelFilter === h.id)}>{h.name}</button>
-            ))}
-          </div>
+          <select value={hotelFilter} onChange={e => setHotelFilter(e.target.value)} style={{ ...inp, width: 'auto', flex: 1, minWidth: 0, padding: '7px 10px', fontSize: '13px' }}>
+            <option value="">All Hotels</option>
+            {hotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
         </div>
 
         {/* Total card */}
@@ -220,9 +218,3 @@ const lbl: React.CSSProperties = { display: 'block', fontSize: '12px', fontWeigh
 const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid #D1DDD4', borderRadius: '8px', fontSize: '14px', fontFamily: 'Inter, sans-serif', outline: 'none', background: '#fff', color: '#1A2E22' }
 const row2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }
 const btnGreen: React.CSSProperties = { background: '#1B3A2D', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-const filterBtn = (active: boolean): React.CSSProperties => ({
-  whiteSpace: 'nowrap', padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 500,
-  border: `1.5px solid ${active ? '#1B3A2D' : '#D1DDD4'}`,
-  background: active ? '#1B3A2D' : '#fff', color: active ? '#fff' : '#4A5568',
-  cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-})
