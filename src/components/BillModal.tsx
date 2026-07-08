@@ -5,11 +5,12 @@ import { fmtINR, fmtDate, nightsBetween, getPlanLabel } from '@/lib/utils'
 interface Payment { amount: number }
 interface Booking {
   id: string; bookingRef: string; guestName: string; phone: string; email?: string;
-  hotel: { name: string; location: string };
+  hotel: { name: string; location: string; managerName?: string | null; managerPhone?: string | null };
   checkin: string; checkout: string;
   planType: string; guests: number; rooms: number; ratePerUnit: number;
   subtotal: number; taxPercent: number; taxAmount: number; totalCost: number;
   advance: number; payments: Payment[];
+  cancelled?: boolean; refundAmount?: number;
 }
 
 // PDF-safe currency: jsPDF Helvetica has no Rs symbol (U+20B9)
@@ -109,6 +110,7 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
                 <div style={{ fontSize: '11px', color: '#718096' }}>Hotel Booking Management</div>
               </div>
               <div style={{ textAlign: 'right' }}>
+                {b.cancelled && <div style={{ fontWeight: 800, fontSize: '13px', color: '#C0392B', border: '2px solid #C0392B', borderRadius: '4px', padding: '2px 8px', display: 'inline-block', marginBottom: '4px' }}>CANCELLED</div>}
                 <div style={{ fontWeight: 700, fontSize: '13px', color: '#1B3A2D' }}>{invNo}</div>
                 <div style={{ fontSize: '11px', color: '#718096' }}>Date: {fmtDate(new Date())}</div>
                 {gstNo && <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>GSTIN: {gstNo}</div>}
@@ -127,6 +129,8 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
                 <div style={{ fontWeight: 700, color: '#4A5568', marginBottom: '4px', fontSize: '11px', textTransform: 'uppercase' }}>Property</div>
                 <div style={{ fontWeight: 600 }}>{b.hotel.name}</div>
                 <div style={{ color: '#718096' }}>{b.hotel.location}</div>
+                {b.hotel.managerName && <div style={{ color: '#718096' }}>Manager: {b.hotel.managerName}</div>}
+                {b.hotel.managerPhone && <div style={{ color: '#718096' }}>Manager Ph: {b.hotel.managerPhone}</div>}
                 <div style={{ color: '#718096' }}>Check-in: {fmtDate(b.checkin)}</div>
                 <div style={{ color: '#718096' }}>Check-out: {fmtDate(b.checkout)}</div>
               </div>

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { calcSubtotal, nightsBetween } from '@/lib/utils'
+import { calcSubtotal, nightsBetween, PAYMENT_MODES } from '@/lib/utils'
 
 interface Hotel { id: string; name: string; location: string; totalRooms: number }
 interface Availability { available: number; totalRooms: number; isAvailable: boolean }
@@ -28,6 +28,7 @@ export default function AddBookingPage() {
     hotelId: '', checkin: '', checkout: '',
     planType: 'AP', guests: '2', rooms: '1',
     ratePerUnit: '', taxPercent: '0', advance: '', notes: '',
+    advanceMode: 'CASH', advanceReceivedBy: '',
   })
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2800) }
@@ -208,9 +209,24 @@ export default function AddBookingPage() {
           <div style={secTitle}>Payment</div>
 
           <div style={group}>
-            <label style={lbl}>Advance Taken (₹)</label>
+            <label style={lbl}>Amount Received / Advance (₹)</label>
             <input style={inp} type="number" placeholder="e.g. 5000" value={form.advance} onChange={e => set('advance', e.target.value)} />
           </div>
+
+          {advance > 0 && (
+            <div style={row2}>
+              <div style={group}>
+                <label style={lbl}>Payment Mode</label>
+                <select style={inp} value={form.advanceMode} onChange={e => set('advanceMode', e.target.value)}>
+                  {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
+              <div style={group}>
+                <label style={lbl}>Received By (Staff)</label>
+                <input style={inp} placeholder="Staff name" value={form.advanceReceivedBy} onChange={e => set('advanceReceivedBy', e.target.value)} />
+              </div>
+            </div>
+          )}
 
           {advance > 0 && totalCost > 0 && (
             <div style={{ fontSize: '13px', color: balanceDue > 0 ? '#C0392B' : '#1E7E4E', fontWeight: 600, marginBottom: '14px' }}>
@@ -227,7 +243,7 @@ export default function AddBookingPage() {
             <button onClick={save} disabled={loading} style={{ background: loading ? '#2A5441' : '#1B3A2D', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif' }}>
               {loading ? 'Saving…' : 'Save Booking'}
             </button>
-            <button onClick={() => setForm({ guestName:'',phone:'',email:'',address:'',hotelId:'',checkin:'',checkout:'',planType:'AP',guests:'2',rooms:'1',ratePerUnit:'',taxPercent:'0',advance:'',notes:'' })} style={{ background: '#fff', color: '#1B3A2D', border: '1.5px solid #1B3A2D', borderRadius: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+            <button onClick={() => setForm({ guestName:'',phone:'',email:'',address:'',hotelId:'',checkin:'',checkout:'',planType:'AP',guests:'2',rooms:'1',ratePerUnit:'',taxPercent:'0',advance:'',notes:'',advanceMode:'CASH',advanceReceivedBy:'' })} style={{ background: '#fff', color: '#1B3A2D', border: '1.5px solid #1B3A2D', borderRadius: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
               Clear
             </button>
           </div>

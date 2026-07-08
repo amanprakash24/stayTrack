@@ -1,23 +1,27 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { fmtINR, fmtDateShort, getPlanLabel, totalPaid } from '@/lib/utils'
+import { fmtINR, fmtDateShort, getPlanLabel, totalPaid, PAYMENT_MODES, getPaymentModeLabel } from '@/lib/utils'
 import BillModal from '@/components/BillModal'
 
-interface Payment { id: string; amount: number; note?: string; recordedBy: { name: string }; createdAt: string }
+interface Payment { id: string; amount: number; mode?: string | null; receivedBy?: string | null; note?: string; recordedBy: { name: string }; createdAt: string }
 interface AuditLog { id: string; action: string; user: { name: string }; createdAt: string }
-interface Hotel { id: string; name: string; location: string }
+interface Hotel { id: string; name: string; location: string; managerName?: string | null; managerPhone?: string | null }
 interface Booking {
   id: string; bookingRef: string; guestName: string; phone: string; email?: string; address?: string;
   hotel: Hotel; checkin: string; checkout: string; planType: string;
   guests: number; rooms: number; ratePerUnit: number; subtotal: number;
   taxPercent: number; taxAmount: number; totalCost: number; advance: number;
+  advanceMode?: string | null; advanceReceivedBy?: string | null;
   status: string; notes?: string; createdBy: { name: string }; createdAt: string;
+  cancelled: boolean; cancelledAt?: string | null; cancelledBy?: string | null; cancellationReason?: string | null;
+  refundType?: string | null; refundAmount: number; refundMode?: string | null; refundBy?: string | null;
   payments: Payment[]; auditLogs: AuditLog[];
 }
 
 const FILTERS = [
   { key: 'all', label: 'All' }, { key: 'partial', label: 'Partial' },
   { key: 'pending', label: 'Pending' }, { key: 'paid', label: 'Paid' },
+  { key: 'cancelled', label: 'Cancelled' },
 ]
 
 export default function BookingsPage() {
@@ -27,7 +31,12 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Booking | null>(null)
   const [payAmt, setPayAmt] = useState('')
+  const [payMode, setPayMode] = useState('CASH')
+  const [payReceivedBy, setPayReceivedBy] = useState('')
   const [payLoading, setPayLoading] = useState(false)
+  const [showCancel, setShowCancel] = useState(false)
+  const [cancelForm, setCancelForm] = useState({ reason: '', refundType: 'NONE', refundAmount: '', refundMode: 'CASH', refundBy: '' })
+  const [cancelLoading, setCancelLoading] = useState(false)
   const [toast, setToast] = useState('')
   const [showBill, setShowBill] = useState(false)
   const [billBooking, setBillBooking] = useState<Booking | null>(null)
@@ -61,6 +70,10 @@ export default function BookingsPage() {
     const data = await res.json()
     setSelected(data)
     setPayAmt('')
+    setPayMode('CASH')
+    setPayReceivedBy('')
+    setShowCancel(false)
+    setCancelForm({ reason: '', refundType: 'NONE', refundAmount: '', refundMode: 'CASH', refundBy: '' })
   }
 
   async function quickBill(b: Booking, e: React.MouseEvent) {
@@ -79,7 +92,7 @@ export default function BookingsPage() {
     const res = await fetch(`/api/bookings/${selected.id}/payment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: amt, markFullyPaid: markFull }),
+      body: JSON.stringify({ amount: amt, markFullyPaid: markFull, mode: payMode, receivedBy: payReceivedBy || null }),
     })
     const data = await res.json()
     setPayLoading(false)
@@ -90,22 +103,54 @@ export default function BookingsPage() {
     loadBookings()
   }
 
+  async function cancelBooking() {
+    if (!selected) return
+    if (!cancelForm.reason.trim()) { showToast('Enter cancellation reason'); return }
+    if (!cancelForm.refundBy.trim()) { showToast('Enter staff name'); return }
+    if (cancelForm.refundType === 'PARTIAL' && !(Number(cancelForm.refundAmount) > 0)) {
+      showToast('Enter refund amount'); return
+    }
+    if (!confirm(`Cancel booking ${selected.bookingRef}? This cannot be undone.`)) return
+    setCancelLoading(true)
+    const res = await fetch(`/api/bookings/${selected.id}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reason: cancelForm.reason.trim(),
+        refundType: cancelForm.refundType,
+        refundAmount: Number(cancelForm.refundAmount) || 0,
+        refundMode: cancelForm.refundMode,
+        staffName: cancelForm.refundBy.trim(),
+      }),
+    })
+    const data = await res.json()
+    setCancelLoading(false)
+    if (!res.ok) { showToast(data.error ?? 'Failed to cancel'); return }
+    showToast(`Booking ${selected.bookingRef} cancelled`)
+    setShowCancel(false)
+    await openBooking(selected)
+    loadBookings()
+  }
+
   const paid = selected ? totalPaid(selected.advance, selected.payments) : 0
   const pending = selected ? Math.max(0, selected.totalCost - paid) : 0
   const pct = selected ? Math.round((paid / selected.totalCost) * 100) : 0
 
   const statusColor = (s: string) =>
+    s === 'CANCELLED' ? { bg: '#EDEDED', color: '#5A5A5A' } :
     s === 'PAID' ? { bg: '#E6F5EC', color: '#1E7E4E' } :
     s === 'PARTIAL' ? { bg: '#FEFCE8', color: '#B7791F' } :
     { bg: '#FDECEA', color: '#C0392B' }
 
-  const statusLabel = (s: string) => s === 'PAID' ? '✓ Paid' : s === 'PARTIAL' ? '½ Partial' : '✗ Pending'
+  const statusLabel = (s: string) => s === 'CANCELLED' ? '✕ Cancelled' : s === 'PAID' ? '✓ Paid' : s === 'PARTIAL' ? '½ Partial' : '✗ Pending'
+  const bStatus = (b: Booking) => b.cancelled ? 'CANCELLED' : b.status
 
-  // Summary stats
-  const totalBookings = bookings.length
-  const pendingAmt = bookings.reduce((s, b) => s + Math.max(0, b.totalCost - totalPaid(b.advance, b.payments)), 0)
-  const thisMonth = bookings.filter(b => new Date(b.createdAt).getMonth() === new Date().getMonth()).length
-  const revenue = bookings.reduce((s, b) => s + b.totalCost, 0)
+  // Summary stats (cancelled bookings excluded from money figures)
+  const activeBookings = bookings.filter(b => !b.cancelled)
+  const totalBookings = activeBookings.length
+  const pendingAmt = activeBookings.reduce((s, b) => s + Math.max(0, b.totalCost - totalPaid(b.advance, b.payments)), 0)
+  const thisMonth = activeBookings.filter(b => new Date(b.createdAt).getMonth() === new Date().getMonth()).length
+  const revenue = activeBookings.reduce((s, b) => s + b.totalCost, 0)
 
   return (
     <>
@@ -136,7 +181,7 @@ export default function BookingsPage() {
           <svg width="16" height="16" fill="none" stroke="#718096" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input
             type="text"
-            placeholder="Search by name, phone, hotel…"
+            placeholder="Search by booking no, name, phone, hotel…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{ border: 'none', outline: 'none', fontSize: '14px', padding: '10px 0', flex: 1, fontFamily: 'Inter, sans-serif', background: 'transparent' }}
@@ -160,13 +205,13 @@ export default function BookingsPage() {
           <div style={{ textAlign: 'center', color: '#718096', padding: '40px', fontSize: '14px' }}>No bookings found</div>
         ) : bookings.map(b => {
           const p = totalPaid(b.advance, b.payments)
-          const pend = Math.max(0, b.totalCost - p)
-          const sc = statusColor(b.status)
+          const pend = b.cancelled ? 0 : Math.max(0, b.totalCost - p)
+          const sc = statusColor(bStatus(b))
           return (
-            <div key={b.id} onClick={() => openBooking(b)} style={bookingCard}>
+            <div key={b.id} onClick={() => openBooking(b)} style={{ ...bookingCard, opacity: b.cancelled ? 0.65 : 1 }}>
               <div style={{ padding: '14px 16px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: '15px', color: '#1B3A2D' }}>{b.guestName}</div>
+                  <div style={{ fontWeight: 700, fontSize: '15px', color: '#1B3A2D' }}>{b.guestName} <span style={{ fontSize: '11px', color: '#718096', fontWeight: 500 }}>· {b.bookingRef}</span></div>
                   <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>🏨 {b.hotel.name} · {b.hotel.location}</div>
                   <div style={{ fontSize: '11px', color: '#4A5568', marginTop: '4px' }}>
                     📅 {fmtDateShort(b.checkin)} → {fmtDateShort(b.checkout)} · {b.guests} guest{b.guests > 1 ? 's' : ''} · {b.rooms} room{b.rooms > 1 ? 's' : ''}
@@ -175,7 +220,7 @@ export default function BookingsPage() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
                   <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>
-                    {statusLabel(b.status)}
+                    {statusLabel(bStatus(b))}
                   </span>
                   <button
                     onClick={e => quickBill(b, e)}
@@ -209,8 +254,8 @@ export default function BookingsPage() {
                   <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '17px', color: '#1B3A2D', fontWeight: 800 }}>{selected.guestName}</div>
                   <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>{selected.hotel.name} · {selected.hotel.location}</div>
                 </div>
-                <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: statusColor(selected.status).bg, color: statusColor(selected.status).color }}>
-                  {statusLabel(selected.status)}
+                <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: statusColor(bStatus(selected)).bg, color: statusColor(bStatus(selected)).color }}>
+                  {statusLabel(bStatus(selected))}
                 </span>
               </div>
               {/* Action buttons at the top */}
@@ -235,13 +280,32 @@ export default function BookingsPage() {
               </div>
               {selected.notes && <div style={{ fontSize: '12px', color: '#718096', marginBottom: '16px' }}>📝 {selected.notes}</div>}
 
+              {/* Cancellation info */}
+              {selected.cancelled && (
+                <div style={{ background: '#FDECEA', border: '1px solid #C0392B', borderRadius: '8px', padding: '14px', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#C0392B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Booking Cancelled</div>
+                  <div style={{ fontSize: '13px', color: '#4A5568', display: 'grid', gap: '4px' }}>
+                    {selected.cancelledAt && <div><span style={{ color: '#718096' }}>Date:</span> <strong>{new Date(selected.cancelledAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong></div>}
+                    {selected.cancelledBy && <div><span style={{ color: '#718096' }}>Cancelled By:</span> <strong>{selected.cancelledBy}</strong></div>}
+                    <div><span style={{ color: '#718096' }}>Reason:</span> <strong>{selected.cancellationReason}</strong></div>
+                    <div><span style={{ color: '#718096' }}>Refund:</span> <strong>
+                      {selected.refundType === 'NONE' ? 'No refund' :
+                        `${selected.refundType === 'FULL' ? 'Full' : 'Partial'} — ${fmtINR(selected.refundAmount)} via ${getPaymentModeLabel(selected.refundMode)}${selected.refundBy ? ` by ${selected.refundBy}` : ''}`}
+                    </strong></div>
+                  </div>
+                </div>
+              )}
+
               {/* Payment status */}
               <div style={sectionTitle}>Payment Status</div>
               <div style={{ background: '#EAF0EC', borderRadius: '8px', padding: '14px', marginBottom: '20px' }}>
                 {[
                   ['Total Cost', fmtINR(selected.totalCost), ''],
-                  ['Advance Paid', fmtINR(selected.advance), '#1E7E4E'],
-                  ...selected.payments.map((p, i) => [`Payment ${i + 1}${p.note ? ` (${p.note})` : ''}`, fmtINR(p.amount), '#1E7E4E']),
+                  [`Advance Paid${selected.advanceMode ? ` · ${getPaymentModeLabel(selected.advanceMode)}` : ''}${selected.advanceReceivedBy ? ` · by ${selected.advanceReceivedBy}` : ''}`, fmtINR(selected.advance), '#1E7E4E'],
+                  ...selected.payments.map((p, i) => [
+                    `Payment ${i + 1}${p.mode ? ` · ${getPaymentModeLabel(p.mode)}` : ''}${p.receivedBy ? ` · by ${p.receivedBy}` : ''}${p.note ? ` (${p.note})` : ''}`,
+                    fmtINR(p.amount), '#1E7E4E',
+                  ]),
                 ].map(([k, v, c]) => (
                   <div key={String(k)} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '4px 0' }}>
                     <span>{k}</span><span style={{ color: c || 'inherit', fontWeight: c ? 600 : 400 }}>{v}</span>
@@ -265,12 +329,12 @@ export default function BookingsPage() {
               </div>
 
               {/* Add payment */}
-              {selected.status !== 'PAID' && (
+              {selected.status !== 'PAID' && !selected.cancelled && (
                 <>
                   <div style={sectionTitle}>Add Payment</div>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', marginBottom: '10px' }}>
                     <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#4A5568', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Amount (₹)</label>
+                      <label style={payLbl}>Amount (₹)</label>
                       <input
                         type="number"
                         value={payAmt}
@@ -283,8 +347,79 @@ export default function BookingsPage() {
                       {payLoading ? '…' : 'Record'}
                     </button>
                   </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <div>
+                      <label style={payLbl}>Payment Mode</label>
+                      <select value={payMode} onChange={e => setPayMode(e.target.value)} style={{ ...inputS, width: '100%' }}>
+                        {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={payLbl}>Received By (Staff)</label>
+                      <input value={payReceivedBy} onChange={e => setPayReceivedBy(e.target.value)} placeholder="Staff name" style={{ ...inputS, width: '100%' }} />
+                    </div>
+                  </div>
                   <button onClick={() => addPayment(true)} disabled={payLoading} style={btnOutline}>✓ Mark Fully Paid</button>
                 </>
+              )}
+
+              {/* Cancel booking */}
+              {!selected.cancelled && (
+                <div style={{ marginTop: '24px' }}>
+                  {!showCancel ? (
+                    <button onClick={() => setShowCancel(true)} style={{ ...btnOutline, color: '#C0392B', borderColor: '#C0392B', width: '100%' }}>
+                      ✕ Cancel Booking
+                    </button>
+                  ) : (
+                    <div style={{ background: '#FDECEA', border: '1px solid #C0392B', borderRadius: '10px', padding: '14px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#C0392B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>Cancel Booking</div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <label style={payLbl}>Cancellation Reason *</label>
+                        <input value={cancelForm.reason} onChange={e => setCancelForm(f => ({ ...f, reason: e.target.value }))} placeholder="e.g. Guest changed plans" style={{ ...inputS, width: '100%', background: '#fff' }} />
+                      </div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <label style={payLbl}>Staff Name (Cancelled By) *</label>
+                        <input value={cancelForm.refundBy} onChange={e => setCancelForm(f => ({ ...f, refundBy: e.target.value }))} placeholder="Staff name" style={{ ...inputS, width: '100%', background: '#fff' }} />
+                      </div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <label style={payLbl}>Refund Type *</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          {[['NONE', 'No Refund'], ['PARTIAL', 'Partial'], ['FULL', `Full (${fmtINR(paid)})`]].map(([val, label]) => (
+                            <button key={val} onClick={() => setCancelForm(f => ({ ...f, refundType: val }))} style={{
+                              flex: 1, padding: '8px 4px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                              border: `1.5px solid ${cancelForm.refundType === val ? '#C0392B' : '#D1DDD4'}`,
+                              background: cancelForm.refundType === val ? '#C0392B' : '#fff',
+                              color: cancelForm.refundType === val ? '#fff' : '#4A5568',
+                            }}>{label}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {cancelForm.refundType !== 'NONE' && (
+                        <>
+                          {cancelForm.refundType === 'PARTIAL' && (
+                            <div style={{ marginBottom: '10px' }}>
+                              <label style={payLbl}>Refund Amount (₹) *</label>
+                              <input type="number" value={cancelForm.refundAmount} onChange={e => setCancelForm(f => ({ ...f, refundAmount: e.target.value }))} placeholder={`Max ${fmtINR(paid)}`} style={{ ...inputS, width: '100%', background: '#fff' }} />
+                            </div>
+                          )}
+                          <div style={{ marginBottom: '10px' }}>
+                            <label style={payLbl}>Refund Mode *</label>
+                            <select value={cancelForm.refundMode} onChange={e => setCancelForm(f => ({ ...f, refundMode: e.target.value }))} style={{ ...inputS, width: '100%', background: '#fff' }}>
+                              {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                            </select>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#718096', marginBottom: '10px' }}>Refund amount will automatically be added to hotel expenses.</div>
+                        </>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={cancelBooking} disabled={cancelLoading} style={{ ...btnGreen, background: '#C0392B', flex: 2 }}>
+                          {cancelLoading ? 'Cancelling…' : 'Confirm Cancellation'}
+                        </button>
+                        <button onClick={() => setShowCancel(false)} style={{ ...btnOutline, flex: 1 }}>Back</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Edit history */}
@@ -330,6 +465,7 @@ const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 
 const modal: React.CSSProperties = { background: '#fff', borderRadius: '18px 18px 0 0', width: '100%', maxWidth: '640px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }
 const sectionTitle: React.CSSProperties = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#718096', marginBottom: '10px' }
 const inputS: React.CSSProperties = { padding: '10px 12px', border: '1.5px solid #D1DDD4', borderRadius: '8px', fontSize: '14px', fontFamily: 'Inter, sans-serif', outline: 'none' }
+const payLbl: React.CSSProperties = { fontSize: '12px', fontWeight: 600, color: '#4A5568', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }
 const btnGreen: React.CSSProperties = { background: '#1B3A2D', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const btnGold: React.CSSProperties = { background: '#C9A84C', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const btnOutline: React.CSSProperties = { background: '#fff', color: '#1B3A2D', border: '1.5px solid #1B3A2D', borderRadius: '8px', padding: '10px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }

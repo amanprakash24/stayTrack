@@ -8,13 +8,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const { amount, note, markFullyPaid } = await req.json()
+  const { amount, note, markFullyPaid, mode, receivedBy } = await req.json()
 
   const booking = await prisma.booking.findUnique({
     where: { id },
     include: { payments: true },
   })
   if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (booking.cancelled) return NextResponse.json({ error: 'Booking is cancelled' }, { status: 400 })
 
   let payAmount = Number(amount)
 
@@ -34,6 +35,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     data: {
       bookingId: id,
       amount: payAmount,
+      mode: mode || null,
+      receivedBy: receivedBy || null,
       note: note || null,
       recordedById: session.userId,
     },

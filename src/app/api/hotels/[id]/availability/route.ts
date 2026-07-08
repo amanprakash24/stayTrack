@@ -21,6 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const overlappingBookings = await prisma.booking.findMany({
     where: {
       hotelId: id,
+      cancelled: false,
       id: excludeBookingId ? { not: excludeBookingId } : undefined,
       AND: [
         { checkin: { lt: checkoutDate } },

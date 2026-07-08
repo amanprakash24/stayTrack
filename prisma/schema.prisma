@@ -26,6 +26,19 @@ enum PaymentStatus {
   PAID
 }
 
+enum PaymentMode {
+  CASH
+  ONLINE
+  UPI
+  BANK
+}
+
+enum RefundType {
+  FULL
+  PARTIAL
+  NONE
+}
+
 model User {
   id        String   @id @default(cuid())
   name      String
@@ -42,20 +55,23 @@ model User {
   bookings  Booking[]
   payments  Payment[]
   auditLogs AuditLog[]
+  expenses  Expense[]
 }
 
 model Hotel {
   id          String   @id @default(cuid())
   name        String
   location    String
-  totalRooms  Int
-  managerName String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  totalRooms   Int
+  managerName  String?
+  managerPhone String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   bookings Booking[]
   partners User[]
+  expenses Expense[]
 }
 
 model Booking {
@@ -81,8 +97,19 @@ model Booking {
   taxAmount   Float         @default(0)
   totalCost   Float
 
-  advance Float         @default(0)
-  status  PaymentStatus @default(PENDING)
+  advance           Float         @default(0)
+  advanceMode       PaymentMode?
+  advanceReceivedBy String?
+  status            PaymentStatus @default(PENDING)
+
+  cancelled          Boolean      @default(false)
+  cancelledAt        DateTime?
+  cancelledBy        String?
+  cancellationReason String?
+  refundType         RefundType?
+  refundAmount       Float        @default(0)
+  refundMode         PaymentMode?
+  refundBy           String?
 
   notes String?
 
@@ -93,6 +120,7 @@ model Booking {
 
   payments  Payment[]
   auditLogs AuditLog[]
+  expenses  Expense[]
 }
 
 model Payment {
@@ -101,10 +129,32 @@ model Payment {
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   amount       Float
+  mode         PaymentMode?
+  receivedBy   String?
   note         String?
   recordedById String
   recordedBy   User     @relation(fields: [recordedById], references: [id])
   createdAt    DateTime @default(now())
+}
+
+model Expense {
+  id          String      @id @default(cuid())
+  date        DateTime
+  hotelId     String
+  hotel       Hotel       @relation(fields: [hotelId], references: [id])
+  category    String
+  description String?
+  amount      Float
+  spentBy     String
+  paymentMode PaymentMode @default(CASH)
+
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model AuditLog {

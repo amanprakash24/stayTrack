@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 
 interface Hotel {
   id: string; name: string; location: string; totalRooms: number;
-  managerName?: string | null; active: boolean
+  managerName?: string | null; managerPhone?: string | null; active: boolean
 }
 interface Partner {
   id: string; name: string; location?: string; active: boolean; createdAt: string;
@@ -21,7 +21,7 @@ export default function AdminPage() {
   const [editingHotel, setEditingHotel] = useState<Hotel | null>(null)
 
   // Add hotel form
-  const [hForm, setHForm] = useState({ name: '', location: '', totalRooms: '', managerName: '' })
+  const [hForm, setHForm] = useState({ name: '', location: '', totalRooms: '', managerName: '', managerPhone: '' })
   // Add partner form
   const [pForm, setPForm] = useState({ name: '', password: '', location: '', hotelId: '' })
   // Edit partner
@@ -67,7 +67,7 @@ export default function AdminPage() {
     const data = await res.json()
     if (!res.ok) { showToast(data.error ?? 'Error'); return }
     showToast(`Hotel "${data.name}" added!`)
-    setHForm({ name: '', location: '', totalRooms: '', managerName: '' })
+    setHForm({ name: '', location: '', totalRooms: '', managerName: '', managerPhone: '' })
     loadHotels()
   }
 
@@ -85,6 +85,7 @@ export default function AdminPage() {
         location: editingHotel.location,
         totalRooms: editingHotel.totalRooms,
         managerName: editingHotel.managerName,
+        managerPhone: editingHotel.managerPhone,
       }),
     })
     if (!res.ok) { showToast('Failed to save'); return }
@@ -204,9 +205,15 @@ export default function AdminPage() {
                   <input style={inp} type="number" min="1" placeholder="e.g. 10" value={hForm.totalRooms} onChange={e => setHForm(f => ({ ...f, totalRooms: e.target.value }))} />
                 </div>
               </div>
-              <div style={group}>
-                <label style={lbl}>Manager Name (optional)</label>
-                <input style={inp} placeholder="e.g. Ramesh Kumar" value={hForm.managerName} onChange={e => setHForm(f => ({ ...f, managerName: e.target.value }))} />
+              <div style={row2}>
+                <div style={group}>
+                  <label style={lbl}>Manager Name (optional)</label>
+                  <input style={inp} placeholder="e.g. Ramesh Kumar" value={hForm.managerName} onChange={e => setHForm(f => ({ ...f, managerName: e.target.value }))} />
+                </div>
+                <div style={group}>
+                  <label style={lbl}>Manager Mobile</label>
+                  <input style={inp} type="tel" placeholder="10-digit number" value={hForm.managerPhone} onChange={e => setHForm(f => ({ ...f, managerPhone: e.target.value }))} />
+                </div>
               </div>
               <button onClick={addHotel} style={btnGreen}>+ Add Hotel</button>
             </div>
@@ -243,6 +250,13 @@ export default function AdminPage() {
                           <input style={inp} placeholder="optional" value={editingHotel.managerName ?? ''} onChange={e => setEditingHotel(v => v && ({ ...v, managerName: e.target.value }))} />
                         </div>
                       </div>
+                      <div style={row2}>
+                        <div style={group}>
+                          <label style={lbl}>Manager Mobile</label>
+                          <input style={inp} type="tel" placeholder="10-digit number" value={editingHotel.managerPhone ?? ''} onChange={e => setEditingHotel(v => v && ({ ...v, managerPhone: e.target.value }))} />
+                        </div>
+                        <div />
+                      </div>
                       <div style={{ display: 'flex', gap: '10px' }}>
                         <button onClick={saveEdit} style={btnGreen}>Save Changes</button>
                         <button onClick={() => setEditingHotel(null)} style={btnOutline}>Cancel</button>
@@ -259,6 +273,7 @@ export default function AdminPage() {
                         <div style={{ fontSize: '12px', color: '#718096', marginTop: '3px' }}>
                           📍 {h.location} · {h.totalRooms} rooms
                           {h.managerName && ` · 👤 ${h.managerName}`}
+                          {h.managerPhone && ` · 📞 ${h.managerPhone}`}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>

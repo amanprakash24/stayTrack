@@ -4,7 +4,7 @@ import { fmtINR } from '@/lib/utils'
 
 type PeriodKey = 'last-month' | 'current-month' | '3-months' | 'custom'
 
-interface MonthData { label: string; revenue: number; bookings: number; collected: number }
+interface MonthData { label: string; revenue: number; bookings: number; collected: number; expenses: number }
 interface LocationData { name: string; revenue: number }
 interface PartnerData { name: string; count: number }
 interface RawBooking {
@@ -12,10 +12,24 @@ interface RawBooking {
   totalCost: number; advance: number; paid: number; pending: number; status: string;
   checkin: string; checkout: string; createdBy: string; planType: string;
 }
+interface RawExpense {
+  date: string; hotel: string; location: string; category: string; description: string;
+  amount: number; spentBy: string; paymentMode: string; bookingRef: string;
+}
+interface HotelSummary {
+  hotelId: string; name: string; location: string; bookings: number; revenue: number;
+  income: number; expenses: number; net: number; cancelledCount: number; refundTotal: number;
+}
+interface Hotel { id: string; name: string; location: string }
 interface Analytics {
   months: MonthData[]; locations: LocationData[]; partners: PartnerData[];
-  totals: { revenue: number; bookings: number; collected: number; outstanding: number };
+  totals: {
+    revenue: number; bookings: number; collected: number; outstanding: number;
+    expenses: number; net: number; cancelledBookings: number; refunds: number;
+  };
+  hotelSummary: HotelSummary[];
   rawBookings: RawBooking[];
+  rawExpenses: RawExpense[];
 }
 
 const PERIODS: { key: PeriodKey; label: string }[] = [
@@ -51,6 +65,12 @@ export default function AnalyticsPage() {
   const [customTo, setCustomTo] = useState('')
   const [data, setData] = useState<Analytics | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hotels, setHotels] = useState<Hotel[]>([])
+  const [hotelFilter, setHotelFilter] = useState('')
+
+  useEffect(() => {
+    fetch('/api/hotels').then(r => r.json()).then(d => { if (Array.isArray(d)) setHotels(d) })
+  }, [])
 
   useEffect(() => {
     if (period === 'custom' && (!customFrom || !customTo)) return
@@ -62,10 +82,11 @@ export default function AnalyticsPage() {
       const range = getDateRange(period)!
       url = `/api/analytics?from=${range.from}&to=${range.to}`
     }
+    if (hotelFilter) url += `&hotelId=${hotelFilter}`
     fetch(url)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
-  }, [period, customFrom, customTo])
+  }, [period, customFrom, customTo, hotelFilter])
 
   const periodLabel =
     period === 'last-month' ? 'Last Month' :
@@ -76,7 +97,34 @@ export default function AnalyticsPage() {
   async function exportExcel() {
     if (!data) return
     const { utils, writeFile } = await import('xlsx')
-    const rows = data.rawBookings.map(b => ({
+    const wb = utils.book_new()
+
+    // Sheet 1: Hotel-wise summary
+    const summaryRows = data.hotelSummary.map(h => ({
+      'Hotel': h.name,
+      'Location': h.location,
+      'Total Bookings': h.bookings,
+      'Total Revenue (Booked)': h.revenue,
+      'Total Income (Collected)': h.income,
+      'Total Expenses': h.expenses,
+      'Net Profit/Loss': h.net,
+      'Cancelled Bookings': h.cancelledCount,
+      'Total Refunds': h.refundTotal,
+    }))
+    summaryRows.push({
+      'Hotel': 'TOTAL', 'Location': '',
+      'Total Bookings': data.totals.bookings,
+      'Total Revenue (Booked)': data.totals.revenue,
+      'Total Income (Collected)': data.totals.collected,
+      'Total Expenses': data.totals.expenses,
+      'Net Profit/Loss': data.totals.net,
+      'Cancelled Bookings': data.totals.cancelledBookings,
+      'Total Refunds': data.totals.refunds,
+    })
+    utils.book_append_sheet(wb, utils.json_to_sheet(summaryRows), 'Hotel Summary')
+
+    // Sheet 2: Bookings
+    const bookingRows = data.rawBookings.map(b => ({
       'Booking Ref': b.bookingRef,
       'Guest Name': b.guestName,
       'Phone': b.phone,
@@ -92,10 +140,24 @@ export default function AnalyticsPage() {
       'Status': b.status,
       'Created By': b.createdBy,
     }))
-    const ws = utils.json_to_sheet(rows)
-    const wb = utils.book_new()
-    utils.book_append_sheet(wb, ws, 'Bookings')
-    writeFile(wb, `StayTrack-${periodLabel.replace(/ /g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    utils.book_append_sheet(wb, utils.json_to_sheet(bookingRows), 'Bookings')
+
+    // Sheet 3: Expenses
+    const expenseRows = data.rawExpenses.map(e => ({
+      'Date': e.date.slice(0, 10),
+      'Hotel': e.hotel,
+      'Location': e.location,
+      'Category': e.category,
+      'Description': e.description,
+      'Amount': e.amount,
+      'Spent By': e.spentBy,
+      'Payment Mode': e.paymentMode,
+      'Booking Ref (Refund)': e.bookingRef,
+    }))
+    utils.book_append_sheet(wb, utils.json_to_sheet(expenseRows), 'Expenses')
+
+    const hotelName = hotelFilter ? hotels.find(h => h.id === hotelFilter)?.name.replace(/ /g, '-') ?? 'Hotel' : 'All-Hotels'
+    writeFile(wb, `StayTrack-${hotelName}-${periodLabel.replace(/ /g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   const maxRevenue = data ? Math.max(...data.months.map(m => m.revenue), 1) : 1
@@ -110,6 +172,14 @@ export default function AnalyticsPage() {
           <div style={{ fontSize: '12px', color: '#718096' }}>Revenue & occupancy overview</div>
         </div>
         <button onClick={exportExcel} style={btnOutline}>⬇ Export Excel</button>
+      </div>
+
+      {/* Hotel filter */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <button onClick={() => setHotelFilter('')} style={hotelChip(!hotelFilter)}>All Hotels</button>
+        {hotels.map(h => (
+          <button key={h.id} onClick={() => setHotelFilter(h.id)} style={hotelChip(hotelFilter === h.id)}>{h.name}</button>
+        ))}
       </div>
 
       {/* Period tabs */}
@@ -152,16 +222,51 @@ export default function AnalyticsPage() {
           {/* Summary stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '10px', marginBottom: '16px' }}>
             {[
-              { label: 'Total Revenue', value: fmtINR(data.totals.revenue), style: {} },
+              { label: 'Total Income (Collected)', value: fmtINR(data.totals.collected), style: { color: '#1E7E4E' } },
+              { label: 'Total Expenses', value: fmtINR(data.totals.expenses), style: { color: '#C0392B' } },
+              { label: 'Net Profit/Loss', value: fmtINR(data.totals.net), style: { color: data.totals.net >= 0 ? '#1E7E4E' : '#C0392B' } },
               { label: 'Bookings', value: data.totals.bookings, style: {} },
-              { label: 'Collected', value: fmtINR(data.totals.collected), style: { color: '#C9A84C' } },
-              { label: 'Outstanding', value: fmtINR(data.totals.outstanding), style: { color: '#C0392B' } },
+              { label: 'Total Revenue (Booked)', value: fmtINR(data.totals.revenue), style: {} },
+              { label: 'Outstanding', value: fmtINR(data.totals.outstanding), style: { color: '#B7791F' } },
+              { label: 'Cancelled Bookings', value: data.totals.cancelledBookings, style: { color: '#C0392B' } },
+              { label: 'Total Refunds', value: fmtINR(data.totals.refunds), style: { color: '#C0392B' } },
             ].map(s => (
               <div key={s.label} style={statCard}>
                 <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{s.label}</div>
                 <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '20px', color: '#1B3A2D', marginTop: '2px', ...s.style }}>{s.value}</div>
               </div>
             ))}
+          </div>
+
+          {/* Hotel-wise P&L summary */}
+          <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #D1DDD4', boxShadow: '0 2px 12px rgba(27,58,45,0.08)', marginBottom: '14px' }}>
+            <div style={{ padding: '16px 16px 12px', fontWeight: 700, fontSize: '13px', color: '#1B3A2D', borderBottom: '1px solid #EAF0EC' }}>
+              Hotel-wise Summary · {periodLabel}
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ background: '#EAF0EC' }}>
+                    {['Hotel', 'Bookings', 'Income', 'Expenses', 'Net P/L', 'Cancelled', 'Refunds'].map(h => (
+                      <th key={h} style={{ padding: '8px', textAlign: h === 'Hotel' ? 'left' : 'right', color: '#4A5568', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.hotelSummary.map(h => (
+                    <tr key={h.hotelId} style={{ borderBottom: '1px solid #EAF0EC' }}>
+                      <td style={{ padding: '8px', fontWeight: 600, whiteSpace: 'nowrap' as const }}>{h.name}<div style={{ fontSize: '10px', color: '#718096', fontWeight: 400 }}>{h.location}</div></td>
+                      <td style={{ padding: '8px', textAlign: 'right' as const }}>{h.bookings}</td>
+                      <td style={{ padding: '8px', textAlign: 'right' as const, color: '#1E7E4E' }}>{fmtINR(h.income)}</td>
+                      <td style={{ padding: '8px', textAlign: 'right' as const, color: '#C0392B' }}>{fmtINR(h.expenses)}</td>
+                      <td style={{ padding: '8px', textAlign: 'right' as const, fontWeight: 700, color: h.net >= 0 ? '#1E7E4E' : '#C0392B' }}>{fmtINR(h.net)}</td>
+                      <td style={{ padding: '8px', textAlign: 'right' as const }}>{h.cancelledCount || '—'}</td>
+                      <td style={{ padding: '8px', textAlign: 'right' as const, color: '#C0392B' }}>{h.refundTotal > 0 ? fmtINR(h.refundTotal) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Revenue bar chart */}
@@ -290,3 +395,9 @@ const chartCard: React.CSSProperties = { background: '#fff', borderRadius: '10px
 const chartTitle: React.CSSProperties = { fontWeight: 700, fontSize: '13px', color: '#1B3A2D', marginBottom: '16px' }
 const btnOutline: React.CSSProperties = { background: '#fff', color: '#1B3A2D', border: '1.5px solid #1B3A2D', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const dateInp: React.CSSProperties = { border: '1.5px solid #D1DDD4', borderRadius: '8px', padding: '7px 10px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: '#1B3A2D', outline: 'none', minWidth: '130px' }
+const hotelChip = (active: boolean): React.CSSProperties => ({
+  whiteSpace: 'nowrap', padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 500,
+  border: `1.5px solid ${active ? '#1B3A2D' : '#D1DDD4'}`,
+  background: active ? '#1B3A2D' : '#fff', color: active ? '#fff' : '#4A5568',
+  cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+})

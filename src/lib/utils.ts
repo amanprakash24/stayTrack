@@ -60,3 +60,30 @@ export function computeStatus(totalCost: number, paid: number): 'PAID' | 'PARTIA
   if (paid > 0) return 'PARTIAL'
   return 'PENDING'
 }
+
+export const PAYMENT_MODES = [
+  { value: 'CASH', label: 'Cash' },
+  { value: 'ONLINE', label: 'Online' },
+  { value: 'UPI', label: 'UPI' },
+  { value: 'BANK', label: 'Bank' },
+] as const
+
+export function getPaymentModeLabel(mode?: string | null): string {
+  if (!mode) return '—'
+  return PAYMENT_MODES.find(m => m.value === mode)?.label ?? mode
+}
+
+export const EXPENSE_CATEGORIES = [
+  'Groceries & Kitchen',
+  'Staff Salary',
+  'Electricity',
+  'Water',
+  'Fuel / Gas',
+  'Repairs & Maintenance',
+  'Housekeeping & Laundry',
+  'Transport',
+  'Marketing & Commission',
+  'Rent',
+  'Refund',
+  'Miscellaneous',
+]

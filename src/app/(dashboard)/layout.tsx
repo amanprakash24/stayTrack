@@ -58,6 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navItems = [
     { href: '/bookings', label: 'Bookings', icon: BookingsIcon },
     { href: '/add', label: 'Add', icon: AddIcon },
+    { href: '/expenses', label: 'Expenses', icon: ExpensesIcon },
     { href: '/analytics', label: 'Analytics', icon: AnalyticsIcon },
     { href: '/history', label: 'History', icon: HistoryIcon },
     ...(user?.role === 'SUPERADMIN' ? [{ href: '/admin', label: 'Admin', icon: AdminIcon }] : []),
@@ -213,6 +214,13 @@ function AddIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" fill="none" stroke={active ? '#1B3A2D' : '#718096'} strokeWidth="2" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="10" /><path d="M12 8v8M8 12h8" />
+    </svg>
+  )
+}
+function ExpensesIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" fill="none" stroke={active ? '#1B3A2D' : '#718096'} strokeWidth="2" viewBox="0 0 24 24">
+      <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" />
     </svg>
   )
 }

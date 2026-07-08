@@ -16,6 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       location: data.location ?? undefined,
       totalRooms: data.totalRooms ? Number(data.totalRooms) : undefined,
       managerName: data.managerName !== undefined ? (data.managerName || null) : undefined,
+      managerPhone: data.managerPhone !== undefined ? (data.managerPhone || null) : undefined,
       active: data.active !== undefined ? data.active : undefined,
     },
   })

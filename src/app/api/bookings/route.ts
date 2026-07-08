@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     where.OR = [
       { guestName: { contains: search, mode: 'insensitive' } },
       { phone: { contains: search } },
+      { bookingRef: { contains: search, mode: 'insensitive' } },
       { hotel: { name: { contains: search, mode: 'insensitive' } } },
     ]
   }
@@ -23,9 +24,10 @@ export async function GET(req: NextRequest) {
     where.hotel = { location: { equals: location, mode: 'insensitive' } }
   }
 
-  if (filter === 'paid') where.status = 'PAID'
-  else if (filter === 'partial') where.status = 'PARTIAL'
-  else if (filter === 'pending') where.status = 'PENDING'
+  if (filter === 'paid') { where.status = 'PAID'; where.cancelled = false }
+  else if (filter === 'partial') { where.status = 'PARTIAL'; where.cancelled = false }
+  else if (filter === 'pending') { where.status = 'PENDING'; where.cancelled = false }
+  else if (filter === 'cancelled') where.cancelled = true
 
   const bookings = await prisma.booking.findMany({
     where,
@@ -50,6 +52,7 @@ export async function POST(req: NextRequest) {
     hotelId, checkin, checkout,
     planType, guests, rooms, ratePerUnit,
     taxPercent, advance, notes,
+    advanceMode, advanceReceivedBy,
   } = body
 
   if (!guestName || !phone || !hotelId || !checkin || !checkout || !planType || !ratePerUnit) {
@@ -76,6 +79,7 @@ export async function POST(req: NextRequest) {
   const overlapping = await prisma.booking.findMany({
     where: {
       hotelId,
+      cancelled: false,
       AND: [{ checkin: { lt: checkoutDate } }, { checkout: { gt: checkinDate } }],
     },
     select: { rooms: true },
@@ -111,6 +115,8 @@ export async function POST(req: NextRequest) {
       taxAmount,
       totalCost,
       advance: adv,
+      advanceMode: adv > 0 && advanceMode ? advanceMode : null,
+      advanceReceivedBy: adv > 0 && advanceReceivedBy ? advanceReceivedBy : null,
       status,
       notes: notes || null,
       createdById: session.userId,
