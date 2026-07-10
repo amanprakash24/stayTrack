@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { fmtINR, fmtDateShort, getPlanLabel, totalPaid, PAYMENT_MODES, getPaymentModeLabel } from '@/lib/utils'
 import BillModal from '@/components/BillModal'
+import { showToast } from '@/components/Toast'
 
 interface Payment { id: string; amount: number; mode?: string | null; receivedBy?: string | null; note?: string; recordedBy: { name: string }; createdAt: string }
 interface AuditLog { id: string; action: string; user: { name: string }; createdAt: string }
@@ -37,16 +38,10 @@ export default function BookingsPage() {
   const [showCancel, setShowCancel] = useState(false)
   const [cancelForm, setCancelForm] = useState({ reason: '', refundType: 'NONE', refundAmount: '', refundMode: 'CASH', refundBy: '' })
   const [cancelLoading, setCancelLoading] = useState(false)
-  const [toast, setToast] = useState('')
   const [showBill, setShowBill] = useState(false)
   const [billBooking, setBillBooking] = useState<Booking | null>(null)
   const [locations, setLocations] = useState<string[]>([])
   const [locFilter, setLocFilter] = useState('')
-
-  const showToast = (msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(''), 2800)
-  }
 
   const loadBookings = useCallback(async () => {
     setLoading(true)
@@ -130,6 +125,13 @@ export default function BookingsPage() {
     setShowCancel(false)
     await openBooking(selected)
     loadBookings()
+  }
+
+  // Cancellation is allowed until the end of the checkout day
+  const checkoutPassed = (checkout: string) => {
+    const end = new Date(checkout)
+    end.setHours(23, 59, 59, 999)
+    return new Date() > end
   }
 
   const paid = selected ? totalPaid(selected.advance, selected.payments) : 0
@@ -367,7 +369,19 @@ export default function BookingsPage() {
               {!selected.cancelled && (
                 <div style={{ marginTop: '24px' }}>
                   {!showCancel ? (
-                    <button onClick={() => setShowCancel(true)} style={{ ...btnOutline, color: '#C0392B', borderColor: '#C0392B', width: '100%' }}>
+                    <button
+                      onClick={() => {
+                        if (checkoutPassed(selected.checkout)) {
+                          showToast('Booking cannot be cancelled — checkout date has passed')
+                          return
+                        }
+                        setShowCancel(true)
+                      }}
+                      style={{
+                        ...btnOutline, color: '#C0392B', borderColor: '#C0392B', width: '100%',
+                        ...(checkoutPassed(selected.checkout) ? { opacity: 0.45, cursor: 'not-allowed' } : {}),
+                      }}
+                    >
                       ✕ Cancel Booking
                     </button>
                   ) : (
@@ -448,13 +462,6 @@ export default function BookingsPage() {
           <BillModal booking={bk} paid={p} pending={pend} onClose={() => { setShowBill(false); setBillBooking(null) }} />
         )
       })()}
-
-      {/* Toast */}
-      {toast && (
-        <div style={{ position: 'fixed', bottom: '90px', left: '50%', transform: 'translateX(-50%)', background: '#1B3A2D', color: '#fff', padding: '10px 20px', borderRadius: '24px', fontSize: '13px', fontWeight: 500, zIndex: 999, whiteSpace: 'nowrap', boxShadow: '0 8px 32px rgba(27,58,45,0.18)' }}>
-          {toast}
-        </div>
-      )}
     </>
   )
 }

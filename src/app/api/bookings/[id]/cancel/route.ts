@@ -28,6 +28,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (booking.cancelled) return NextResponse.json({ error: 'Booking already cancelled' }, { status: 400 })
 
+  // Cancellation is allowed until the end of the checkout day
+  const checkoutEnd = new Date(booking.checkout)
+  checkoutEnd.setHours(23, 59, 59, 999)
+  if (new Date() > checkoutEnd) {
+    return NextResponse.json({ error: 'Booking cannot be cancelled — checkout date has passed' }, { status: 400 })
+  }
+
   const totalPaid = booking.advance + booking.payments.reduce((s, p) => s + p.amount, 0)
 
   let refund = 0

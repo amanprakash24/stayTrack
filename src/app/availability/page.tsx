@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { showToast } from '@/components/Toast'
 
 interface Hotel { id: string; name: string; location: string; totalRooms: number }
 interface AvailResult {
@@ -66,6 +67,8 @@ export default function AvailabilityPage() {
     )
     setResults(updated)
     setChecking(false)
+    const openCount = updated.filter(r => r.isAvailable).length
+    showToast(openCount > 0 ? `${openCount} hotel${openCount === 1 ? '' : 's'} available for these dates ✓` : 'No rooms available for these dates')
   }
 
   const nights = checkin && checkout && checkin < checkout

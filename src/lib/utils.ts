@@ -10,7 +10,7 @@ export function fmtDate(d: string | Date): string {
 export function fmtDateShort(d: string | Date): string {
   const date = typeof d === 'string' ? new Date(d) : d
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  return `${date.getDate()} ${months[date.getMonth()]}`
+  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
 }
 
 export function nightsBetween(checkin: string, checkout: string): number {

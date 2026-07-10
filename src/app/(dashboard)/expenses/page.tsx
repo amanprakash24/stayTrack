@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { fmtINR, fmtDate, PAYMENT_MODES, getPaymentModeLabel, EXPENSE_CATEGORIES } from '@/lib/utils'
+import { showToast } from '@/components/Toast'
 
 interface Hotel { id: string; name: string; location: string }
 interface Expense {
@@ -18,7 +19,6 @@ export default function ExpensesPage() {
   const [hotels, setHotels] = useState<Hotel[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -31,8 +31,6 @@ export default function ExpensesPage() {
     date: toISO(new Date()), hotelId: '', category: EXPENSE_CATEGORIES[0],
     description: '', amount: '', spentBy: '', paymentMode: 'CASH',
   })
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2800) }
 
   useEffect(() => {
     fetch('/api/hotels').then(r => r.json()).then(d => { if (Array.isArray(d)) setHotels(d) })
@@ -201,12 +199,6 @@ export default function ExpensesPage() {
           </div>
         ))}
       </div>
-
-      {toast && (
-        <div style={{ position: 'fixed', bottom: '90px', left: '50%', transform: 'translateX(-50%)', background: '#1B3A2D', color: '#fff', padding: '10px 20px', borderRadius: '24px', fontSize: '13px', fontWeight: 500, zIndex: 999, whiteSpace: 'nowrap', boxShadow: '0 8px 32px rgba(27,58,45,0.18)' }}>
-          {toast}
-        </div>
-      )}
     </>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { showToast } from '@/components/Toast'
 
 interface Hotel {
   id: string; name: string; location: string; totalRooms: number;
@@ -17,7 +18,6 @@ export default function AdminPage() {
   const [tab, setTab] = useState<'hotels' | 'partners'>('hotels')
   const [hotels, setHotels] = useState<Hotel[]>([])
   const [partners, setPartners] = useState<Partner[]>([])
-  const [toast, setToast] = useState('')
   const [editingHotel, setEditingHotel] = useState<Hotel | null>(null)
 
   // Add hotel form
@@ -28,8 +28,6 @@ export default function AdminPage() {
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null)
   const [editPwd, setEditPwd] = useState('')
   const [showPwd, setShowPwd] = useState<Record<string, boolean>>({})
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2800) }
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
@@ -408,12 +406,6 @@ export default function AdminPage() {
           </>
         )}
       </div>
-
-      {toast && (
-        <div style={{ position: 'fixed', bottom: '90px', left: '50%', transform: 'translateX(-50%)', background: '#1B3A2D', color: '#fff', padding: '10px 20px', borderRadius: '24px', fontSize: '13px', fontWeight: 500, zIndex: 999, whiteSpace: 'nowrap', boxShadow: '0 8px 32px rgba(27,58,45,0.18)' }}>
-          {toast}
-        </div>
-      )}
     </>
   )
 }

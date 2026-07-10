@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { fmtINR, fmtDate, nightsBetween, getPlanLabel } from '@/lib/utils'
+import { showToast } from '@/components/Toast'
 
 interface Payment { amount: number }
 interface Booking {
@@ -30,23 +31,28 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
   function downloadBill() {
     const el = document.getElementById('bill-content')
     if (!el) return
+    showToast('Preparing PDF…')
     import('jspdf').then(({ jsPDF }) => {
       const doc = new jsPDF({ unit: 'pt', format: 'a4' })
       doc.html(el, {
-        callback: (d) => { d.save(`${invNo}-${b.guestName}.pdf`) },
+        callback: (d) => {
+          d.save(`${invNo}-${b.guestName}.pdf`)
+          showToast(`Bill ${invNo} downloaded ✓`)
+        },
         x: 20, y: 20, width: 555, windowWidth: 650,
       })
-    })
+    }).catch(() => showToast('Failed to generate PDF'))
   }
 
   async function shareBill() {
     if (navigator.share) {
       try {
         await navigator.share({ title: `Invoice ${invNo}`, text: `Bill for ${b.guestName} — ${fmtINR(b.totalCost)}` })
+        showToast('Bill shared ✓')
       } catch { /* cancelled */ }
     } else {
       navigator.clipboard.writeText(`Invoice ${invNo} for ${b.guestName}: Total ${fmtINR(b.totalCost)}, Balance due ${fmtINR(pending)}`)
-      alert('Bill info copied to clipboard!')
+      showToast('Bill info copied to clipboard ✓')
     }
   }
 
@@ -77,7 +83,7 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
             <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: '8px', border: '1.5px solid #D1DDD4', background: '#fff', color: '#4A5568', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
               Cancel
             </button>
-            <button onClick={() => setStep('bill')} style={{ flex: 2, padding: '11px', borderRadius: '8px', border: 'none', background: '#1B3A2D', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+            <button onClick={() => { setStep('bill'); showToast(`Bill ${invNo} generated ✓`) }} style={{ flex: 2, padding: '11px', borderRadius: '8px', border: 'none', background: '#1B3A2D', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
               Proceed →
             </button>
           </div>

@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { fmtDate, fmtINR, getPlanLabel, totalPaid } from '@/lib/utils'
+import { showToast } from '@/components/Toast'
 
 interface Payment { amount: number }
 interface Hotel { id: string; name: string; location: string }
@@ -108,6 +109,7 @@ export default function StaffViewPage() {
 
     const hotelName = hotelFilter === 'all' ? 'All Hotels' : (hotels.find(h => h[0] === hotelFilter)?.[1] ?? 'Hotels')
     writeFile(wb, `StayTrack_Bookings_${hotelName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    showToast(`Excel exported — ${filtered.length} booking${filtered.length === 1 ? '' : 's'} ✓`)
   }
 
   const statusBadge = (s: string) => {

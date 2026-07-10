@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { calcSubtotal, nightsBetween, PAYMENT_MODES } from '@/lib/utils'
+import { showToast } from '@/components/Toast'
 
 interface Hotel { id: string; name: string; location: string; totalRooms: number }
 interface Availability { available: number; totalRooms: number; isAvailable: boolean }
@@ -21,7 +22,6 @@ export default function AddBookingPage() {
   const [hotels, setHotels] = useState<Hotel[]>([])
   const [availability, setAvailability] = useState<Availability | null>(null)
   const [loading, setLoading] = useState(false)
-  const [toast, setToast] = useState('')
 
   const [form, setForm] = useState({
     guestName: '', phone: '', email: '', address: '',
@@ -30,8 +30,6 @@ export default function AddBookingPage() {
     ratePerUnit: '', taxPercent: '0', advance: '', notes: '',
     advanceMode: 'CASH', advanceReceivedBy: '',
   })
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2800) }
 
   useEffect(() => {
     fetch('/api/hotels').then(r => r.json()).then(d => { if (Array.isArray(d)) setHotels(d) })
@@ -243,18 +241,12 @@ export default function AddBookingPage() {
             <button onClick={save} disabled={loading} style={{ background: loading ? '#2A5441' : '#1B3A2D', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif' }}>
               {loading ? 'Saving…' : 'Save Booking'}
             </button>
-            <button onClick={() => setForm({ guestName:'',phone:'',email:'',address:'',hotelId:'',checkin:'',checkout:'',planType:'AP',guests:'2',rooms:'1',ratePerUnit:'',taxPercent:'0',advance:'',notes:'',advanceMode:'CASH',advanceReceivedBy:'' })} style={{ background: '#fff', color: '#1B3A2D', border: '1.5px solid #1B3A2D', borderRadius: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+            <button onClick={() => { setForm({ guestName:'',phone:'',email:'',address:'',hotelId:'',checkin:'',checkout:'',planType:'AP',guests:'2',rooms:'1',ratePerUnit:'',taxPercent:'0',advance:'',notes:'',advanceMode:'CASH',advanceReceivedBy:'' }); showToast('Form cleared') }} style={{ background: '#fff', color: '#1B3A2D', border: '1.5px solid #1B3A2D', borderRadius: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
               Clear
             </button>
           </div>
         </div>
       </div>
-
-      {toast && (
-        <div style={{ position: 'fixed', bottom: '90px', left: '50%', transform: 'translateX(-50%)', background: '#1B3A2D', color: '#fff', padding: '10px 20px', borderRadius: '24px', fontSize: '13px', fontWeight: 500, zIndex: 999, whiteSpace: 'nowrap', boxShadow: '0 8px 32px rgba(27,58,45,0.18)' }}>
-          {toast}
-        </div>
-      )}
     </>
   )
 }

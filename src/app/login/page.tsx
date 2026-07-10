@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { showToast } from '@/components/Toast'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -32,6 +33,7 @@ export default function LoginPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Login failed'); return }
+      showToast(`Welcome, ${name.trim()}! ✓`)
       router.push('/bookings')
     } catch {
       setError('Network error. Try again.')
