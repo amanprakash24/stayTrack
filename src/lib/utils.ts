@@ -47,10 +47,6 @@ export function getStatusLabel(status: string): string {
   return status === 'PAID' ? '✓ Fully Paid' : status === 'PARTIAL' ? '½ Partial' : '✗ Pending'
 }
 
-export function genBookingRef(count: number): string {
-  return 'BK' + String(count).padStart(4, '0')
-}
-
 export function totalPaid(advance: number, payments: { amount: number }[]): number {
   return advance + payments.reduce((sum, p) => sum + p.amount, 0)
 }

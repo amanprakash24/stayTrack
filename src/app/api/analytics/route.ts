@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getSession } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role === 'STAFF') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const { searchParams } = new URL(req.url)
 
   const fromParam = searchParams.get('from')
@@ -50,7 +55,8 @@ export async function GET(req: NextRequest) {
       orderBy: { date: 'asc' },
     }),
     prisma.hotel.findMany({
-      where: hotelId ? { id: hotelId } : undefined,
+      // Deactivated hotels stay out of the summary
+      where: hotelId ? { id: hotelId } : { active: true },
       select: { id: true, name: true, location: true },
       orderBy: { name: 'asc' },
     }),
@@ -152,7 +158,7 @@ export async function GET(req: NextRequest) {
       status: b.cancelled ? 'CANCELLED' : b.status,
       checkin: b.checkin,
       checkout: b.checkout,
-      createdBy: b.createdBy.name,
+      createdBy: b.bookedBy ?? b.createdBy.name,
       planType: b.planType,
     })),
     rawExpenses: expenses.map(e => ({

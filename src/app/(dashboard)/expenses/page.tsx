@@ -33,7 +33,13 @@ export default function ExpensesPage() {
   })
 
   useEffect(() => {
-    fetch('/api/hotels').then(r => r.json()).then(d => { if (Array.isArray(d)) setHotels(d) })
+    fetch('/api/hotels').then(r => r.json()).then(d => {
+      if (Array.isArray(d)) {
+        setHotels(d)
+        // Staff see only their hotel — pre-select it
+        if (d.length === 1) setForm(f => ({ ...f, hotelId: d[0].id }))
+      }
+    })
   }, [])
 
   const loadExpenses = useCallback(async () => {

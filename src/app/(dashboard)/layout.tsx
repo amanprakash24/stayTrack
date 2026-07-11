@@ -58,8 +58,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navItems = [
     { href: '/bookings', label: 'Bookings', icon: BookingsIcon },
     { href: '/add', label: 'Add', icon: AddIcon },
+    { href: '/availability', label: 'Rooms', icon: RoomsIcon },
     { href: '/expenses', label: 'Expenses', icon: ExpensesIcon },
-    { href: '/analytics', label: 'Analytics', icon: AnalyticsIcon },
+    // Staff don't get analytics — P&L stays with admin/partners
+    ...(user?.role !== 'STAFF' ? [{ href: '/analytics', label: 'Analytics', icon: AnalyticsIcon }] : []),
     { href: '/history', label: 'History', icon: HistoryIcon },
     ...(user?.role === 'SUPERADMIN' ? [{ href: '/admin', label: 'Admin', icon: AdminIcon }] : []),
   ]
@@ -80,8 +82,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         zIndex: 100,
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
       }}>
-        <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '20px', fontWeight: 800, letterSpacing: '-0.5px' }}>
-          Stay<span style={{ color: '#C9A84C' }}>Track</span>
+        <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '17px', fontWeight: 800, letterSpacing: '-0.5px' }}>
+          Happy <span style={{ color: '#C9A84C' }}>&amp; Panorama</span>
         </div>
         {user && (
           <div ref={menuRef} style={{ position: 'relative' }}>
@@ -112,7 +114,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid #EAF0EC' }}>
                   <div style={{ fontWeight: 700, fontSize: '13px', color: '#1B3A2D' }}>{user.name}</div>
                   <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>
-                    {user.role === 'SUPERADMIN' ? 'Super Admin' : 'Partner'}
+                    {user.role === 'SUPERADMIN' ? 'Super Admin' : user.role === 'STAFF' ? 'Hotel Staff' : 'Partner'}
                     {user.location ? ` · ${user.location}` : ''}
                   </div>
                 </div>
@@ -214,6 +216,13 @@ function AddIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" fill="none" stroke={active ? '#1B3A2D' : '#718096'} strokeWidth="2" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="10" /><path d="M12 8v8M8 12h8" />
+    </svg>
+  )
+}
+function RoomsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" fill="none" stroke={active ? '#1B3A2D' : '#718096'} strokeWidth="2" viewBox="0 0 24 24">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
     </svg>
   )
 }

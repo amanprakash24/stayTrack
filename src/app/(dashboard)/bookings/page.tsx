@@ -2,18 +2,19 @@
 import { useEffect, useState, useCallback } from 'react'
 import { fmtINR, fmtDateShort, getPlanLabel, totalPaid, PAYMENT_MODES, getPaymentModeLabel } from '@/lib/utils'
 import BillModal from '@/components/BillModal'
+import TourismBillModal from '@/components/TourismBillModal'
 import { showToast } from '@/components/Toast'
 
 interface Payment { id: string; amount: number; mode?: string | null; receivedBy?: string | null; note?: string; recordedBy: { name: string }; createdAt: string }
 interface AuditLog { id: string; action: string; user: { name: string }; createdAt: string }
-interface Hotel { id: string; name: string; location: string; managerName?: string | null; managerPhone?: string | null }
+interface Hotel { id: string; name: string; location: string; tourismFee?: number | null; managerName?: string | null; managerPhone?: string | null }
 interface Booking {
   id: string; bookingRef: string; guestName: string; phone: string; email?: string; address?: string;
-  hotel: Hotel; checkin: string; checkout: string; planType: string;
+  hotel: Hotel; checkin: string; checkout: string; planType: string; roomType?: string | null;
   guests: number; rooms: number; ratePerUnit: number; subtotal: number;
   taxPercent: number; taxAmount: number; totalCost: number; advance: number;
   advanceMode?: string | null; advanceReceivedBy?: string | null;
-  status: string; notes?: string; createdBy: { name: string }; createdAt: string;
+  status: string; notes?: string; bookedBy?: string | null; createdBy: { name: string }; createdAt: string;
   cancelled: boolean; cancelledAt?: string | null; cancelledBy?: string | null; cancellationReason?: string | null;
   refundType?: string | null; refundAmount: number; refundMode?: string | null; refundBy?: string | null;
   payments: Payment[]; auditLogs: AuditLog[];
@@ -39,6 +40,7 @@ export default function BookingsPage() {
   const [cancelForm, setCancelForm] = useState({ reason: '', refundType: 'NONE', refundAmount: '', refundMode: 'CASH', refundBy: '' })
   const [cancelLoading, setCancelLoading] = useState(false)
   const [showBill, setShowBill] = useState(false)
+  const [showTourismBill, setShowTourismBill] = useState(false)
   const [billBooking, setBillBooking] = useState<Booking | null>(null)
   const [locations, setLocations] = useState<string[]>([])
   const [locFilter, setLocFilter] = useState('')
@@ -83,11 +85,12 @@ export default function BookingsPage() {
     if (!selected) return
     const amt = markFull ? undefined : Number(payAmt)
     if (!markFull && (!amt || amt <= 0)) { showToast('Enter a valid amount'); return }
+    if (!payReceivedBy.trim()) { showToast('Enter who received the payment (staff name)'); return }
     setPayLoading(true)
     const res = await fetch(`/api/bookings/${selected.id}/payment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: amt, markFullyPaid: markFull, mode: payMode, receivedBy: payReceivedBy || null }),
+      body: JSON.stringify({ amount: amt, markFullyPaid: markFull, mode: payMode, receivedBy: payReceivedBy.trim() }),
     })
     const data = await res.json()
     setPayLoading(false)
@@ -216,7 +219,7 @@ export default function BookingsPage() {
                   <div style={{ fontWeight: 700, fontSize: '15px', color: '#1B3A2D' }}>{b.guestName} <span style={{ fontSize: '11px', color: '#718096', fontWeight: 500 }}>· {b.bookingRef}</span></div>
                   <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>🏨 {b.hotel.name} · {b.hotel.location}</div>
                   <div style={{ fontSize: '11px', color: '#4A5568', marginTop: '4px' }}>
-                    📅 {fmtDateShort(b.checkin)} → {fmtDateShort(b.checkout)} · {b.guests} guest{b.guests > 1 ? 's' : ''} · {b.rooms} room{b.rooms > 1 ? 's' : ''}
+                    📅 {fmtDateShort(b.checkin)} → {fmtDateShort(b.checkout)} · {b.guests} guest{b.guests > 1 ? 's' : ''} · {b.rooms} room{b.rooms > 1 ? 's' : ''}{b.roomType ? ` (${b.roomType === 'DELUXE' ? 'Deluxe AC' : 'Std Non-AC'})` : ''}
                   </div>
                   <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>{getPlanLabel(b.planType)}</div>
                 </div>
@@ -238,7 +241,7 @@ export default function BookingsPage() {
                   <div style={{ fontSize: '11px', color: '#718096' }}><strong style={{ display: 'block', fontSize: '13px', color: '#1E7E4E', fontWeight: 600 }}>{fmtINR(p)}</strong>Paid</div>
                   {pend > 0 && <div style={{ fontSize: '11px', color: '#718096' }}><strong style={{ display: 'block', fontSize: '13px', color: '#C0392B', fontWeight: 600 }}>{fmtINR(pend)}</strong>Due</div>}
                 </div>
-                <div style={{ fontSize: '11px', color: '#718096' }}>via {b.createdBy.name.split(' ')[0]}</div>
+                <div style={{ fontSize: '11px', color: '#718096' }}>via {(b.bookedBy ?? b.createdBy.name).split(' ')[0]}</div>
               </div>
             </div>
           )
@@ -261,8 +264,11 @@ export default function BookingsPage() {
                 </span>
               </div>
               {/* Action buttons at the top */}
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button onClick={() => setShowBill(true)} style={btnGold}>🧾 Generate Bill</button>
+                <button onClick={() => setShowTourismBill(true)} style={{ ...btnOutline, color: '#C9A84C', borderColor: '#C9A84C' }}>
+                  🏞 Tourism Bill
+                </button>
                 <button onClick={() => setSelected(null)} style={btnOutline}>Close</button>
               </div>
             </div>
@@ -274,8 +280,9 @@ export default function BookingsPage() {
                 {[
                   ['Phone', selected.phone], ['Email', selected.email || '—'],
                   ['Check-in', fmtDateShort(selected.checkin)], ['Check-out', fmtDateShort(selected.checkout)],
-                  ['Guests', selected.guests], ['Rooms', selected.rooms],
+                  ['Guests', selected.guests], ['Rooms', `${selected.rooms}${selected.roomType ? ` · ${selected.roomType === 'DELUXE' ? 'Deluxe AC' : 'Standard Non-AC'}` : ''}`],
                   ['Plan', getPlanLabel(selected.planType)], ['Ref', selected.bookingRef],
+                  ['Booked By', selected.bookedBy ?? selected.createdBy.name], ['Account', selected.createdBy.name],
                 ].map(([k, v]) => (
                   <div key={String(k)}><span style={{ color: '#718096' }}>{k}</span><br /><strong>{v}</strong></div>
                 ))}
@@ -351,13 +358,13 @@ export default function BookingsPage() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                     <div>
-                      <label style={payLbl}>Payment Mode</label>
+                      <label style={payLbl}>Payment Mode *</label>
                       <select value={payMode} onChange={e => setPayMode(e.target.value)} style={{ ...inputS, width: '100%' }}>
                         {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label style={payLbl}>Received By (Staff)</label>
+                      <label style={payLbl}>Received By (Staff) *</label>
                       <input value={payReceivedBy} onChange={e => setPayReceivedBy(e.target.value)} placeholder="Staff name" style={{ ...inputS, width: '100%' }} />
                     </div>
                   </div>
@@ -451,6 +458,11 @@ export default function BookingsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Tourism Bill Modal */}
+      {showTourismBill && selected && (
+        <TourismBillModal booking={selected} onClose={() => setShowTourismBill(false)} />
       )}
 
       {/* Bill Modal */}

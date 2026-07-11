@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   SUPERADMIN
   PARTNER
+  STAFF
 }
 
 enum PlanType {
@@ -60,9 +61,14 @@ model User {
 
 model Hotel {
   id          String   @id @default(cuid())
+  code        String?  @unique
   name        String
   location    String
   totalRooms   Int
+  standardRooms Int?
+  deluxeRooms   Int?
+  tourismFee    Float?
+  bookingSeq   Int      @default(0)
   managerName  String?
   managerPhone String?
   active       Boolean  @default(true)
@@ -89,6 +95,7 @@ model Booking {
   checkout DateTime
 
   planType    PlanType
+  roomType    String?
   guests      Int
   rooms       Int
   ratePerUnit Float
@@ -112,6 +119,8 @@ model Booking {
   refundBy           String?
 
   notes String?
+
+  bookedBy String?
 
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])

@@ -15,7 +15,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { payments: true },
   })
   if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (session.role === 'STAFF' && booking.hotelId !== session.hotelId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   if (booking.cancelled) return NextResponse.json({ error: 'Booking is cancelled' }, { status: 400 })
+
+  // Who took the payment and how is always mandatory
+  if (!mode) return NextResponse.json({ error: 'Payment mode is required' }, { status: 400 })
+  if (!receivedBy?.trim()) return NextResponse.json({ error: 'Receiver (staff) name is required' }, { status: 400 })
 
   let payAmount = Number(amount)
 
@@ -35,8 +42,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     data: {
       bookingId: id,
       amount: payAmount,
-      mode: mode || null,
-      receivedBy: receivedBy || null,
+      mode,
+      receivedBy: receivedBy.trim(),
       note: note || null,
       recordedById: session.userId,
     },

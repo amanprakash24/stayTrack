@@ -157,7 +157,7 @@ export default function AnalyticsPage() {
     utils.book_append_sheet(wb, utils.json_to_sheet(expenseRows), 'Expenses')
 
     const hotelName = hotelFilter ? hotels.find(h => h.id === hotelFilter)?.name.replace(/ /g, '-') ?? 'Hotel' : 'All-Hotels'
-    writeFile(wb, `StayTrack-${hotelName}-${periodLabel.replace(/ /g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    writeFile(wb, `HappyPanorama-${hotelName}-${periodLabel.replace(/ /g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   const maxRevenue = data ? Math.max(...data.months.map(m => m.revenue), 1) : 1

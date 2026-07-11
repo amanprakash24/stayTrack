@@ -10,8 +10,9 @@ const secret = new TextEncoder().encode(
 export interface JWTPayload {
   userId: string
   name: string
-  role: 'SUPERADMIN' | 'PARTNER'
+  role: 'SUPERADMIN' | 'PARTNER' | 'STAFF'
   location?: string | null
+  hotelId?: string | null
 }
 
 export async function signToken(payload: JWTPayload): Promise<string> {

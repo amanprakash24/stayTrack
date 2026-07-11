@@ -26,6 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { payments: true },
   })
   if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (session.role === 'STAFF' && booking.hotelId !== session.hotelId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   if (booking.cancelled) return NextResponse.json({ error: 'Booking already cancelled' }, { status: 400 })
 
   // Cancellation is allowed until the end of the checkout day

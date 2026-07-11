@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
 
   const where: Record<string, unknown> = {}
   if (hotelId) where.hotelId = hotelId
+  // Staff only see expenses of their own hotel
+  if (session.role === 'STAFF') where.hotelId = session.hotelId ?? ''
   if (from || to) {
     const date: Record<string, Date> = {}
     if (from) {
@@ -45,6 +47,9 @@ export async function POST(req: NextRequest) {
 
   if (!date || !hotelId || !category || !amount || !spentBy || !paymentMode) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+  if (session.role === 'STAFF' && hotelId !== session.hotelId) {
+    return NextResponse.json({ error: 'You can only add expenses for your own hotel' }, { status: 403 })
   }
   const amt = Number(amount)
   if (!amt || amt <= 0) {

@@ -3,11 +3,17 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { showToast } from '@/components/Toast'
 
+type Mode = 'partner' | 'staff' | 'admin'
+
+interface StaffHotel { id: string; name: string; location: string }
+
 export default function LoginPage() {
   const router = useRouter()
   const [partnerNames, setPartnerNames] = useState<string[]>([])
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [staffHotels, setStaffHotels] = useState<StaffHotel[]>([])
+  const [mode, setMode] = useState<Mode>('partner')
   const [name, setName] = useState('')
+  const [staffHotelId, setStaffHotelId] = useState('')
   const [password, setPassword] = useState('')
   const [showPwd, setShowPwd] = useState(false)
   const [error, setError] = useState('')
@@ -18,22 +24,33 @@ export default function LoginPage() {
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setPartnerNames(d) })
       .catch(() => {})
+    fetch('/api/auth/staff-hotels')
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setStaffHotels(d) })
+      .catch(() => {})
   }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !password) { setError('Enter name and password'); return }
+    if (mode === 'staff') {
+      if (!staffHotelId || !password) { setError('Select your hotel and enter password'); return }
+    } else if (!name.trim() || !password) {
+      setError('Enter name and password'); return
+    }
     setLoading(true)
     setError('')
     try {
+      const body = mode === 'staff'
+        ? { staffHotelId, password }
+        : { name: name.trim(), password }
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), password }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Login failed'); return }
-      showToast(`Welcome, ${name.trim()}! ✓`)
+      showToast(`Welcome, ${data.user?.name ?? 'back'}! ✓`)
       router.push('/bookings')
     } catch {
       setError('Network error. Try again.')
@@ -42,19 +59,15 @@ export default function LoginPage() {
     }
   }
 
-  function switchToAdmin() {
-    setIsAdmin(true)
+  function switchMode(m: Mode) {
+    setMode(m)
     setName('')
+    setStaffHotelId('')
     setPassword('')
     setError('')
   }
 
-  function switchToPartner() {
-    setIsAdmin(false)
-    setName('')
-    setPassword('')
-    setError('')
-  }
+  const accent = mode === 'admin' ? '#C9A84C' : '#1B3A2D'
 
   return (
     <div style={{
@@ -73,36 +86,39 @@ export default function LoginPage() {
         maxWidth: '400px',
         boxShadow: '0 8px 32px rgba(27,58,45,0.18)',
       }}>
-        <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '28px', color: '#1B3A2D', marginBottom: '4px', fontWeight: 800 }}>
-          Stay<span style={{ color: '#C9A84C' }}>Track</span>
+        <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '24px', color: '#1B3A2D', marginBottom: '4px', fontWeight: 800 }}>
+          Happy <span style={{ color: '#C9A84C' }}>&amp; Panorama</span>
         </div>
         <div style={{ color: '#718096', fontSize: '13px', marginBottom: '24px' }}>
-          Hotel Booking Management
+          Groups of Hotel · Booking Management
         </div>
 
         {/* Mode toggle */}
         <div style={{ display: 'flex', background: '#EAF0EC', borderRadius: '10px', padding: '4px', marginBottom: '24px' }}>
-          <button
-            type="button"
-            onClick={switchToPartner}
-            style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', background: !isAdmin ? '#1B3A2D' : 'transparent', color: !isAdmin ? '#fff' : '#718096', transition: 'all 0.15s' }}
-          >
-            Partner Login
-          </button>
-          <button
-            type="button"
-            onClick={switchToAdmin}
-            style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', background: isAdmin ? '#C9A84C' : 'transparent', color: isAdmin ? '#fff' : '#718096', transition: 'all 0.15s' }}
-          >
-            Admin Login
-          </button>
+          {([['partner', 'Partner'], ['staff', 'Staff'], ['admin', 'Admin']] as [Mode, string][]).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => switchMode(m)}
+              style={{
+                flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontSize: '13px', fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                background: mode === m ? (m === 'admin' ? '#C9A84C' : '#1B3A2D') : 'transparent',
+                color: mode === m ? '#fff' : '#718096', transition: 'all 0.15s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '16px' }}>
-            <label style={labelStyle}>{isAdmin ? 'Admin Username' : 'Select Your Name'}</label>
+            <label style={labelStyle}>
+              {mode === 'admin' ? 'Admin Username' : mode === 'staff' ? 'Select Your Hotel' : 'Select Your Name'}
+            </label>
 
-            {isAdmin ? (
+            {mode === 'admin' ? (
               <input
                 style={inputStyle}
                 type="text"
@@ -112,6 +128,17 @@ export default function LoginPage() {
                 autoComplete="username"
                 autoFocus
               />
+            ) : mode === 'staff' ? (
+              <select
+                style={{ ...inputStyle, color: staffHotelId ? '#1B3A2D' : '#A0AEC0' }}
+                value={staffHotelId}
+                onChange={e => setStaffHotelId(e.target.value)}
+              >
+                <option value="">— Select hotel —</option>
+                {staffHotels.map(h => (
+                  <option key={h.id} value={h.id}>{h.name} · {h.location}</option>
+                ))}
+              </select>
             ) : (
               <select
                 style={{ ...inputStyle, color: name ? '#1B3A2D' : '#A0AEC0' }}
@@ -124,6 +151,11 @@ export default function LoginPage() {
                 ))}
               </select>
             )}
+            {mode === 'staff' && staffHotels.length === 0 && (
+              <div style={{ fontSize: '11px', color: '#718096', marginTop: '6px' }}>
+                No staff accounts yet — ask admin to create one for your hotel
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: '20px' }}>
@@ -132,7 +164,7 @@ export default function LoginPage() {
               <input
                 style={{ ...inputStyle, paddingRight: '44px' }}
                 type={showPwd ? 'text' : 'password'}
-                placeholder="Enter password"
+                placeholder={mode === 'staff' ? 'Hotel staff password' : 'Enter password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 autoComplete="current-password"
@@ -158,7 +190,7 @@ export default function LoginPage() {
             disabled={loading}
             style={{
               width: '100%',
-              background: loading ? '#A0AEC0' : isAdmin ? '#C9A84C' : '#1B3A2D',
+              background: loading ? '#A0AEC0' : accent,
               color: '#fff',
               border: 'none',
               borderRadius: '10px',
@@ -177,50 +209,9 @@ export default function LoginPage() {
         <div style={{ fontSize: '11px', color: '#718096', textAlign: 'center', marginTop: '20px' }}>
           Contact admin if you forgot your password
         </div>
-
-        <div style={{ borderTop: '1px solid #EAF0EC', marginTop: '20px', paddingTop: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#718096', marginBottom: '8px' }}>
-            Staff member? View bookings without logging in
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={() => { window.location.href = '/staff-view' }}
-              style={staffBtnStyle}
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              View Bookings (Staff)
-            </button>
-            <button
-              type="button"
-              onClick={() => { window.location.href = '/availability' }}
-              style={staffBtnStyle}
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
-              Check Room Availability
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   )
-}
-
-const staffBtnStyle: React.CSSProperties = {
-  width: '100%',
-  background: '#F4F7F5',
-  color: '#1B3A2D',
-  border: '1.5px solid #D1DDD4',
-  borderRadius: '10px',
-  padding: '11px',
-  fontSize: '13px',
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontFamily: 'Inter, sans-serif',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '6px',
 }
 
 const labelStyle: React.CSSProperties = {

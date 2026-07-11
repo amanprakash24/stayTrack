@@ -3,8 +3,8 @@ import './globals.css'
 import Toaster from '@/components/Toast'
 
 export const metadata: Metadata = {
-  title: 'StayTrack — Hotel Booking Manager',
-  description: 'Hotel booking management for partners',
+  title: 'Happy & Panorama Groups of Hotel — Booking Manager',
+  description: 'Hotel booking management for Happy & Panorama Groups of Hotel',
 }
 
 export const viewport: Viewport = {
@@ -22,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icon.svg" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="StayTrack" />
+        <meta name="apple-mobile-web-app-title" content="H&P Hotels" />
       </head>
       <body suppressHydrationWarning>{children}<Toaster /></body>
     </html>

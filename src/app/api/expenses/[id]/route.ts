@@ -13,6 +13,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   })
   if (!expense) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  if (session.role === 'STAFF' && expense.hotelId !== session.hotelId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   if (session.role !== 'SUPERADMIN' && expense.createdById !== session.userId) {
     return NextResponse.json({ error: 'You can only delete expenses you added' }, { status: 403 })
   }

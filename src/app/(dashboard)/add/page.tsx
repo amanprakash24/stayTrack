@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { calcSubtotal, nightsBetween, PAYMENT_MODES } from '@/lib/utils'
 import { showToast } from '@/components/Toast'
 
-interface Hotel { id: string; name: string; location: string; totalRooms: number }
+interface Hotel { id: string; name: string; location: string; totalRooms: number; standardRooms?: number | null; deluxeRooms?: number | null }
 interface Availability { available: number; totalRooms: number; isAvailable: boolean }
 
 const PLANS = [
@@ -28,11 +28,26 @@ export default function AddBookingPage() {
     hotelId: '', checkin: '', checkout: '',
     planType: 'AP', guests: '2', rooms: '1',
     ratePerUnit: '', taxPercent: '0', advance: '', notes: '',
-    advanceMode: 'CASH', advanceReceivedBy: '',
+    advanceMode: 'CASH', advanceReceivedBy: '', bookedBy: '',
   })
+  const [pickRoomType, setPickRoomType] = useState(false)
+  const [roomType, setRoomType] = useState('STANDARD')
+
+  // Prefill "Booked By" with the logged-in user's name (still editable)
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d.user?.name) setForm(f => f.bookedBy ? f : { ...f, bookedBy: d.user.name })
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
-    fetch('/api/hotels').then(r => r.json()).then(d => { if (Array.isArray(d)) setHotels(d) })
+    fetch('/api/hotels').then(r => r.json()).then(d => {
+      if (Array.isArray(d)) {
+        setHotels(d)
+        // Staff see only their hotel — pre-select it
+        if (d.length === 1) setForm(f => ({ ...f, hotelId: d[0].id }))
+      }
+    })
   }, [])
 
   const checkAvailability = useCallback(async () => {
@@ -48,8 +63,16 @@ export default function AddBookingPage() {
     setForm(f => ({ ...f, [field]: value }))
   }
 
+  // Checkin can't be in the past; checkout must be at least the day after checkin
+  const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
+  const minCheckout = form.checkin
+    ? (() => { const d = new Date(form.checkin); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) })()
+    : undefined
+  const checkinPast = Boolean(form.checkin && form.checkin < todayStr)
+  const dateInvalid = Boolean(form.checkin && form.checkout && form.checkout <= form.checkin)
+
   // Auto-calculations
-  const nights = form.checkin && form.checkout ? nightsBetween(form.checkin, form.checkout) : 0
+  const nights = form.checkin && form.checkout && !dateInvalid ? nightsBetween(form.checkin, form.checkout) : 0
   const rate = Number(form.ratePerUnit) || 0
   const guests = Number(form.guests) || 1
   const rooms = Number(form.rooms) || 1
@@ -66,6 +89,18 @@ export default function AddBookingPage() {
     if (!form.guestName || !form.phone || !form.hotelId || !form.checkin || !form.checkout || !form.planType || !form.ratePerUnit) {
       showToast('Fill all required fields'); return
     }
+    if (!form.bookedBy.trim()) {
+      showToast('Enter who is taking this booking (Booked By)'); return
+    }
+    if (checkinPast) {
+      showToast('Check-in date cannot be in the past'); return
+    }
+    if (dateInvalid) {
+      showToast('Check-out date must be after check-in date'); return
+    }
+    if (advance > 0 && !form.advanceReceivedBy.trim()) {
+      showToast('Enter who received the advance (staff name)'); return
+    }
     if (Number(form.rooms) > (availability?.available ?? 0)) {
       showToast(`Only ${availability?.available} room(s) available for these dates`); return
     }
@@ -73,7 +108,7 @@ export default function AddBookingPage() {
     const res = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, guests, rooms, ratePerUnit: rate, taxPercent: tax, advance }),
+      body: JSON.stringify({ ...form, guests, rooms, ratePerUnit: rate, taxPercent: tax, advance, roomType: pickRoomType ? roomType : null }),
     })
     const data = await res.json()
     setLoading(false)
@@ -110,6 +145,10 @@ export default function AddBookingPage() {
             <label style={lbl}>Home City / Address</label>
             <input style={inp} placeholder="Guest home city" value={form.address} onChange={e => set('address', e.target.value)} />
           </div>
+          <div style={group}>
+            <label style={lbl}>Booked By (Staff / Partner / Admin) *</label>
+            <input style={inp} placeholder="Who is taking this booking" value={form.bookedBy} onChange={e => set('bookedBy', e.target.value)} />
+          </div>
 
           <div style={divider} />
           <div style={secTitle}>Property & Dates</div>
@@ -125,13 +164,19 @@ export default function AddBookingPage() {
           <div style={row2}>
             <div style={group}>
               <label style={lbl}>Check-in *</label>
-              <input style={{ ...inp, width: '85%' }} type="date" value={form.checkin} onChange={e => set('checkin', e.target.value)} />
+              <input style={{ ...inp, width: '85%' }} type="date" min={todayStr} value={form.checkin} onChange={e => set('checkin', e.target.value)} />
             </div>
             <div style={group}>
               <label style={lbl}>Check-out *</label>
-              <input style={{ ...inp, width: '85%' }} type="date" value={form.checkout} onChange={e => set('checkout', e.target.value)} />
+              <input style={{ ...inp, width: '85%' }} type="date" min={minCheckout} value={form.checkout} onChange={e => set('checkout', e.target.value)} />
             </div>
           </div>
+
+          {(dateInvalid || checkinPast) && (
+            <div style={{ background: '#FDECEA', color: '#C0392B', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', marginBottom: '12px', fontWeight: 600 }}>
+              {checkinPast ? '✗ Check-in date cannot be in the past' : '✗ Check-out date must be after check-in date'}
+            </div>
+          )}
 
           {nights > 0 && (
             <div style={{ fontSize: '12px', color: '#1B3A2D', fontWeight: 600, marginBottom: '12px' }}>
@@ -157,6 +202,32 @@ export default function AddBookingPage() {
               <label style={lbl}>No. of Rooms</label>
               <input style={inp} type="number" min="1" placeholder="e.g. 1" value={form.rooms} onChange={e => set('rooms', e.target.value)} />
             </div>
+          </div>
+
+          {/* Optional room type */}
+          <div style={{ ...group, marginTop: '-2px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#4A5568', fontWeight: 600, cursor: 'pointer' }}>
+              <input type="checkbox" checked={pickRoomType} onChange={e => setPickRoomType(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#1B3A2D', cursor: 'pointer' }} />
+              Select room type (optional)
+            </label>
+            {pickRoomType && (() => {
+              const h = hotels.find(x => x.id === form.hotelId)
+              return (
+                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                  {[
+                    ['STANDARD', `Standard Non-AC${h?.standardRooms ? ` (${h.standardRooms})` : ''}`],
+                    ['DELUXE', `Deluxe AC${h?.deluxeRooms ? ` (${h.deluxeRooms})` : ''}`],
+                  ].map(([val, label]) => (
+                    <button key={val} type="button" onClick={() => setRoomType(val)} style={{
+                      flex: 1, padding: '9px 6px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                      border: `1.5px solid ${roomType === val ? '#1B3A2D' : '#D1DDD4'}`,
+                      background: roomType === val ? '#1B3A2D' : '#fff',
+                      color: roomType === val ? '#fff' : '#4A5568',
+                    }}>{label}</button>
+                  ))}
+                </div>
+              )
+            })()}
           </div>
 
           <div style={divider} />
@@ -214,13 +285,13 @@ export default function AddBookingPage() {
           {advance > 0 && (
             <div style={row2}>
               <div style={group}>
-                <label style={lbl}>Payment Mode</label>
+                <label style={lbl}>Payment Mode *</label>
                 <select style={inp} value={form.advanceMode} onChange={e => set('advanceMode', e.target.value)}>
                   {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
               </div>
               <div style={group}>
-                <label style={lbl}>Received By (Staff)</label>
+                <label style={lbl}>Received By (Staff) *</label>
                 <input style={inp} placeholder="Staff name" value={form.advanceReceivedBy} onChange={e => set('advanceReceivedBy', e.target.value)} />
               </div>
             </div>
@@ -241,7 +312,7 @@ export default function AddBookingPage() {
             <button onClick={save} disabled={loading} style={{ background: loading ? '#2A5441' : '#1B3A2D', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif' }}>
               {loading ? 'Saving…' : 'Save Booking'}
             </button>
-            <button onClick={() => { setForm({ guestName:'',phone:'',email:'',address:'',hotelId:'',checkin:'',checkout:'',planType:'AP',guests:'2',rooms:'1',ratePerUnit:'',taxPercent:'0',advance:'',notes:'',advanceMode:'CASH',advanceReceivedBy:'' }); showToast('Form cleared') }} style={{ background: '#fff', color: '#1B3A2D', border: '1.5px solid #1B3A2D', borderRadius: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+            <button onClick={() => { setForm(f => ({ guestName:'',phone:'',email:'',address:'',hotelId:'',checkin:'',checkout:'',planType:'AP',guests:'2',rooms:'1',ratePerUnit:'',taxPercent:'0',advance:'',notes:'',advanceMode:'CASH',advanceReceivedBy:'',bookedBy:f.bookedBy })); showToast('Form cleared') }} style={{ background: '#fff', color: '#1B3A2D', border: '1.5px solid #1B3A2D', borderRadius: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
               Clear
             </button>
           </div>
