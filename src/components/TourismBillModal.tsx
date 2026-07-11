@@ -18,6 +18,7 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
   const [step, setStep] = useState<'input' | 'bill'>('input')
   const [feeInput, setFeeInput] = useState(b.hotel.tourismFee ? String(b.hotel.tourismFee) : '')
   const [guestsInput, setGuestsInput] = useState(String(b.guests))
+  const [gstNo, setGstNo] = useState('')
 
   const fee = Number(feeInput) || 0
   const guests = Number(guestsInput) || 0
@@ -78,6 +79,16 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
               onChange={e => setGuestsInput(e.target.value)}
             />
           </div>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={inputLbl}>GST Number <span style={{ color: '#718096', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+            <input
+              style={inputBox}
+              type="text"
+              placeholder="e.g. 22AAAAA0000A1Z5"
+              value={gstNo}
+              onChange={e => setGstNo(e.target.value.toUpperCase())}
+            />
+          </div>
 
           {fee > 0 && guests > 0 && (
             <div style={{ background: '#EAF0EC', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#1B3A2D', fontWeight: 700, marginBottom: '16px', textAlign: 'center' }}>
@@ -117,11 +128,12 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontWeight: 700, fontSize: '13px', color: '#1B3A2D' }}>{billNo}</div>
                 <div style={{ fontSize: '11px', color: '#718096' }}>Date: {fmtDate(new Date())}</div>
+                {gstNo && <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>GSTIN: {gstNo.trim()}</div>}
               </div>
             </div>
 
             <div style={{ background: '#EAF0EC', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#1B3A2D', textAlign: 'center', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              State Tourism Fee — One-Time Charge Per Guest
+              State Tourism Fee : One-Time Charge Per Guest
             </div>
 
             {/* Guest / stay details */}
@@ -136,7 +148,8 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
                 <div style={{ fontWeight: 700, color: '#4A5568', marginBottom: '4px', fontSize: '11px', textTransform: 'uppercase' }}>Property</div>
                 <div style={{ fontWeight: 700, color: '#1B3A2D' }}>{b.hotel.name}</div>
                 <div style={{ color: '#718096' }}>{b.hotel.location}</div>
-                <div style={{ color: '#718096' }}>Stay: {fmtDate(b.checkin)} → {fmtDate(b.checkout)}</div>
+                {/* PDF-safe: jsPDF Helvetica cannot render the arrow character */}
+                <div style={{ color: '#718096' }}>Stay: {fmtDate(b.checkin)} to {fmtDate(b.checkout)}</div>
               </div>
             </div>
 
@@ -152,7 +165,7 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
               </thead>
               <tbody>
                 <tr>
-                  <td style={{ ...td, textAlign: 'left' }}>State Tourism Fee ({b.hotel.location.trim()}) — one-time</td>
+                  <td style={{ ...td, textAlign: 'left' }}>State Tourism Fee ({b.hotel.location.trim()}) - one-time</td>
                   <td style={td}>{guests}</td>
                   <td style={td}>{rs(fee)}</td>
                   <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{rs(total)}</td>
