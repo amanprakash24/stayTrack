@@ -55,6 +55,11 @@ export async function POST(req: NextRequest) {
   if (!amt || amt <= 0) {
     return NextResponse.json({ error: 'Enter a valid amount' }, { status: 400 })
   }
+  const expenseDate = new Date(date)
+  const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
+  if (isNaN(expenseDate.getTime()) || expenseDate > endOfToday) {
+    return NextResponse.json({ error: 'Expense date cannot be in the future' }, { status: 400 })
+  }
 
   const hotel = await prisma.hotel.findUnique({ where: { id: hotelId } })
   if (!hotel) return NextResponse.json({ error: 'Hotel not found' }, { status: 404 })

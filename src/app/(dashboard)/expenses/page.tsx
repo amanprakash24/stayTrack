@@ -65,6 +65,9 @@ export default function ExpensesPage() {
     if (!form.date || !form.hotelId || !form.category || !form.amount || !form.spentBy) {
       showToast('Fill date, hotel, category, amount and staff name'); return
     }
+    if (form.date > toISO(new Date())) {
+      showToast('Expense date cannot be in the future'); return
+    }
     setSaving(true)
     const res = await fetch('/api/expenses', {
       method: 'POST',
@@ -114,7 +117,7 @@ export default function ExpensesPage() {
             <div style={row2}>
               <div style={group}>
                 <label style={lbl}>Date *</label>
-                <input style={{ ...inp, width: '85%' }} type="date" value={form.date} onChange={e => set('date', e.target.value)} />
+                <input style={{ ...inp, width: '85%' }} type="date" value={form.date} max={toISO(new Date())} onChange={e => set('date', e.target.value)} />
               </div>
               <div style={group}>
                 <label style={lbl}>Hotel *</label>
