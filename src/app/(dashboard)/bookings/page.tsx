@@ -378,8 +378,8 @@ export default function BookingsPage() {
                 </>
               )}
 
-              {/* Cancel booking */}
-              {!selected.cancelled && (
+              {/* Cancel booking — not available to staff */}
+              {!selected.cancelled && !isStaff && (
                 <div style={{ marginTop: '24px' }}>
                   {!showCancel ? (
                     <button

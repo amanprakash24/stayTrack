@@ -8,6 +8,9 @@ const PAYMENT_MODES = ['CASH', 'ONLINE', 'UPI', 'BANK'] as const
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role === 'STAFF') {
+    return NextResponse.json({ error: 'Staff accounts cannot cancel bookings' }, { status: 403 })
+  }
 
   const { id } = await params
   const body = await req.json()
@@ -26,9 +29,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { payments: true },
   })
   if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (session.role === 'STAFF' && booking.hotelId !== session.hotelId) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
   if (booking.cancelled) return NextResponse.json({ error: 'Booking already cancelled' }, { status: 400 })
 
   // Cancellation is allowed until the end of the checkout day
