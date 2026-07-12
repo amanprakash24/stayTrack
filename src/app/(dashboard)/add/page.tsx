@@ -98,6 +98,9 @@ export default function AddBookingPage() {
     if (dateInvalid) {
       showToast('Check-out date must be after check-in date'); return
     }
+    if (form.advance.trim() === '' || Number(form.advance) < 0) {
+      showToast('Enter amount received / advance (enter 0 if nothing received)'); return
+    }
     if (advance > 0 && !form.advanceReceivedBy.trim()) {
       showToast('Enter who received the advance (staff name)'); return
     }
@@ -278,8 +281,8 @@ export default function AddBookingPage() {
           <div style={secTitle}>Payment</div>
 
           <div style={group}>
-            <label style={lbl}>Amount Received / Advance (₹)</label>
-            <input style={inp} type="number" placeholder="e.g. 5000" value={form.advance} onChange={e => set('advance', e.target.value)} />
+            <label style={lbl}>Amount Received / Advance (₹) *</label>
+            <input style={inp} type="number" min="0" placeholder="e.g. 5000 (enter 0 if none)" value={form.advance} onChange={e => set('advance', e.target.value)} />
           </div>
 
           {advance > 0 && (

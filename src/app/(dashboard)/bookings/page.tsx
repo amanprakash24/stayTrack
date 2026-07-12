@@ -41,9 +41,15 @@ export default function BookingsPage() {
   const [cancelLoading, setCancelLoading] = useState(false)
   const [showBill, setShowBill] = useState(false)
   const [showTourismBill, setShowTourismBill] = useState(false)
-  const [billBooking, setBillBooking] = useState<Booking | null>(null)
   const [locations, setLocations] = useState<string[]>([])
   const [locFilter, setLocFilter] = useState('')
+  const [role, setRole] = useState<string | null>(null)
+  // Until the role loads, behave like staff so revenue never flashes on screen
+  const isStaff = role === null || role === 'STAFF'
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => setRole(d.user?.role ?? null)).catch(() => {})
+  }, [])
 
   const loadBookings = useCallback(async () => {
     setLoading(true)
@@ -73,12 +79,11 @@ export default function BookingsPage() {
     setCancelForm({ reason: '', refundType: 'NONE', refundAmount: '', refundMode: 'CASH', refundBy: '' })
   }
 
-  async function quickBill(b: Booking, e: React.MouseEvent) {
+  // The card's Bill button opens the booking detail modal, where
+  // Generate Bill / Tourism Bill are available
+  function quickBill(b: Booking, e: React.MouseEvent) {
     e.stopPropagation()
-    const res = await fetch(`/api/bookings/${b.id}`)
-    const data = await res.json()
-    setBillBooking(data)
-    setShowBill(true)
+    openBooking(b)
   }
 
   async function addPayment(markFull = false) {
@@ -172,7 +177,8 @@ export default function BookingsPage() {
             { label: 'Total Bookings', value: totalBookings, style: {} },
             { label: 'Pending ₹', value: fmtINR(pendingAmt), style: { color: '#C0392B' } },
             { label: 'This Month', value: thisMonth, style: {} },
-            { label: 'Revenue', value: fmtINR(revenue), style: { color: '#C9A84C' } },
+            // Revenue is hidden from staff accounts
+            ...(isStaff ? [] : [{ label: 'Revenue', value: fmtINR(revenue), style: { color: '#C9A84C' } }]),
           ].map(s => (
             <div key={s.label} style={statCard}>
               <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
@@ -213,7 +219,7 @@ export default function BookingsPage() {
           const pend = b.cancelled ? 0 : Math.max(0, b.totalCost - p)
           const sc = statusColor(bStatus(b))
           return (
-            <div key={b.id} onClick={() => openBooking(b)} style={{ ...bookingCard, opacity: b.cancelled ? 0.65 : 1 }}>
+            <div key={b.id} onClick={isStaff ? undefined : () => openBooking(b)} style={{ ...bookingCard, cursor: isStaff ? 'default' : 'pointer', opacity: b.cancelled ? 0.65 : 1 }}>
               <div style={{ padding: '14px 16px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '15px', color: '#1B3A2D' }}>{b.guestName} <span style={{ fontSize: '11px', color: '#718096', fontWeight: 500 }}>· {b.bookingRef}</span></div>
@@ -466,14 +472,9 @@ export default function BookingsPage() {
       )}
 
       {/* Bill Modal */}
-      {showBill && (billBooking ?? selected) && (() => {
-        const bk = (billBooking ?? selected)!
-        const p = totalPaid(bk.advance, bk.payments)
-        const pend = Math.max(0, bk.totalCost - p)
-        return (
-          <BillModal booking={bk} paid={p} pending={pend} onClose={() => { setShowBill(false); setBillBooking(null) }} />
-        )
-      })()}
+      {showBill && selected && (
+        <BillModal booking={selected} paid={paid} pending={pending} onClose={() => setShowBill(false)} />
+      )}
     </>
   )
 }
