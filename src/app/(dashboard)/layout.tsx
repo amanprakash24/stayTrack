@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { BrandName } from '@/components/AppNameProvider'
 
 interface User { id: string; name: string; role: string; location?: string | null }
 interface BeforeInstallPromptEvent extends Event { prompt(): Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
@@ -83,7 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
       }}>
         <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '17px', fontWeight: 800, letterSpacing: '-0.5px' }}>
-          Happy <span style={{ color: '#C9A84C' }}>&amp; Panorama</span>
+          <BrandName />
         </div>
         {user && (
           <div ref={menuRef} style={{ position: 'relative' }}>

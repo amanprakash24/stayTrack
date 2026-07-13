@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { showToast } from '@/components/Toast'
+import { BrandName } from '@/components/AppNameProvider'
 
 type Mode = 'partner' | 'staff' | 'admin'
 
@@ -86,11 +87,8 @@ export default function LoginPage() {
         maxWidth: '400px',
         boxShadow: '0 8px 32px rgba(27,58,45,0.18)',
       }}>
-        <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '24px', color: '#1B3A2D', marginBottom: '4px', fontWeight: 800 }}>
-          Happy <span style={{ color: '#C9A84C' }}>&amp; Panorama</span>
-        </div>
-        <div style={{ color: '#718096', fontSize: '13px', marginBottom: '24px' }}>
-          Groups of Hotel · Booking Management
+        <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '24px', color: '#1B3A2D', marginBottom: '24px', fontWeight: 800 }}>
+          <BrandName />
         </div>
 
         {/* Mode toggle */}

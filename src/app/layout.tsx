@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import Toaster from '@/components/Toast'
+import { AppNameProvider } from '@/components/AppNameProvider'
+import { APP_NAME } from '@/lib/appName'
 
 export const metadata: Metadata = {
-  title: 'Happy & Panorama Groups of Hotel — Booking Manager',
-  description: 'Hotel booking management for Happy & Panorama Groups of Hotel',
+  title: APP_NAME,
 }
 
 export const viewport: Viewport = {
@@ -18,13 +19,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icon.svg" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="H&P Hotels" />
+        <meta name="apple-mobile-web-app-title" content={APP_NAME} />
       </head>
-      <body suppressHydrationWarning>{children}<Toaster /></body>
+      <body suppressHydrationWarning>
+        <AppNameProvider name={APP_NAME}>{children}<Toaster /></AppNameProvider>
+      </body>
     </html>
   )
 }

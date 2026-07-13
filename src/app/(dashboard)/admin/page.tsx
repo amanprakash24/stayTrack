@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { showToast } from '@/components/Toast'
+import { useAppFileName } from '@/components/AppNameProvider'
 
 interface Hotel {
   id: string; name: string; location: string; totalRooms: number;
@@ -51,6 +52,7 @@ function fmtMB(bytes: number) {
 }
 
 export default function AdminPage() {
+  const appFileName = useAppFileName()
   const router = useRouter()
   const [tab, setTab] = useState<'hotels' | 'partners' | 'staff' | 'database'>('hotels')
   const [hotels, setHotels] = useState<Hotel[]>([])
@@ -252,7 +254,7 @@ export default function AdminPage() {
       'Action': l.action,
     }))), 'History Logs')
 
-    writeFile(wb, `HappyPanorama-Backup-${cleanRange.from}-to-${cleanRange.to}.xlsx`)
+    writeFile(wb, `${appFileName}-Backup-${cleanRange.from}-to-${cleanRange.to}.xlsx`)
     setBackupDone(true)
     showToast('Backup downloaded ✓')
   }

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { fmtINR } from '@/lib/utils'
+import { useAppFileName } from '@/components/AppNameProvider'
 
 type PeriodKey = 'last-month' | 'current-month' | '3-months' | 'custom'
 
@@ -60,6 +61,7 @@ function getDateRange(p: PeriodKey): { from: string; to: string } | null {
 }
 
 export default function AnalyticsPage() {
+  const appFileName = useAppFileName()
   const [period, setPeriod] = useState<PeriodKey>('3-months')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -157,7 +159,7 @@ export default function AnalyticsPage() {
     utils.book_append_sheet(wb, utils.json_to_sheet(expenseRows), 'Expenses')
 
     const hotelName = hotelFilter ? hotels.find(h => h.id === hotelFilter)?.name.replace(/ /g, '-') ?? 'Hotel' : 'All-Hotels'
-    writeFile(wb, `HappyPanorama-${hotelName}-${periodLabel.replace(/ /g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    writeFile(wb, `${appFileName}-${hotelName}-${periodLabel.replace(/ /g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   const maxRevenue = data ? Math.max(...data.months.map(m => m.revenue), 1) : 1
