@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { fmtDate } from '@/lib/utils'
 import { showToast } from './Toast'
-import { useAppName } from '@/components/AppNameProvider'
+import { useAppName, useAppSubName } from '@/components/AppNameProvider'
 
 interface Booking {
   id: string; bookingRef: string; guestName: string; phone: string;
@@ -17,10 +17,12 @@ function rs(n: number) {
 
 export default function TourismBillModal({ booking: b, onClose }: { booking: Booking; onClose: () => void }) {
   const appName = useAppName()
+  const appSubName = useAppSubName()
   const [step, setStep] = useState<'input' | 'bill'>('input')
   const [feeInput, setFeeInput] = useState(b.hotel.tourismFee ? String(b.hotel.tourismFee) : '')
   const [guestsInput, setGuestsInput] = useState(String(b.guests))
   const [gstNo, setGstNo] = useState('')
+  const [editing, setEditing] = useState(false)
 
   const fee = Number(feeInput) || 0
   const guests = Number(guestsInput) || 0
@@ -34,6 +36,12 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
   }
 
   function downloadBill() {
+    // Exit edit mode and let React repaint (drops the gold border/caret) before capturing
+    if (editing) setEditing(false)
+    setTimeout(capturePdf, editing ? 50 : 0)
+  }
+
+  function capturePdf() {
     const el = document.getElementById('tourism-bill-content')
     if (!el) return
     showToast('Preparing PDF…')
@@ -112,20 +120,37 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
       <div style={{ background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '560px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,0.18)' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #EAF0EC', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '17px', fontWeight: 800, color: '#1B3A2D' }}>State Tourism Fee Bill</div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => setStep('input')} style={btnOutline}>← Edit</button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button onClick={() => { setEditing(false); setStep('input') }} style={btnOutline}>← Back</button>
+            <button
+              onClick={() => {
+                if (!editing) showToast('Tap any text on the bill to edit it')
+                setEditing(e => !e)
+              }}
+              style={editing ? btnGreen : btnOutline}
+            >
+              {editing ? '✓ Done' : '✏ Edit'}
+            </button>
             <button onClick={downloadBill} style={btnGold}>⬇ PDF</button>
             <button onClick={onClose} style={btnOutline}>Close</button>
           </div>
         </div>
 
         <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1 }}>
-          <div id="tourism-bill-content" style={{ background: '#fff', border: '2px dashed #D1DDD4', borderRadius: '12px', padding: '24px', fontFamily: 'Inter, sans-serif' }}>
+          {/* contentEditable lets the user tweak any text in place; the PDF is rendered
+              from this same DOM, so edits flow into the download */}
+          <div
+            id="tourism-bill-content"
+            contentEditable={editing}
+            suppressContentEditableWarning
+            style={{ background: '#fff', border: editing ? '2px dashed #C9A84C' : '2px dashed #D1DDD4', borderRadius: '12px', padding: '24px', fontFamily: 'Inter, sans-serif', outline: 'none' }}
+          >
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
               <div>
                 {/* PDF-safe font: jsPDF doc.html only draws built-in fonts — Syne metrics leave big word gaps */}
                 <div style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '18px', color: '#1B3A2D', fontWeight: 800 }}>{appName}</div>
+                {appSubName && <div style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '11px', color: '#718096' }}>{appSubName}</div>}
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontWeight: 700, fontSize: '13px', color: '#1B3A2D' }}>{billNo}</div>
@@ -196,4 +221,5 @@ const td: React.CSSProperties = { padding: '10px', borderBottom: '1px solid #EAF
 const inputLbl: React.CSSProperties = { display: 'block', fontSize: '12px', fontWeight: 600, color: '#4A5568', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' }
 const inputBox: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid #D1DDD4', borderRadius: '8px', fontSize: '14px', fontFamily: 'Inter, sans-serif', outline: 'none', boxSizing: 'border-box' }
 const btnGold: React.CSSProperties = { background: '#C9A84C', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
+const btnGreen: React.CSSProperties = { background: '#1B3A2D', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const btnOutline: React.CSSProperties = { background: '#fff', color: '#1B3A2D', border: '1.5px solid #1B3A2D', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }

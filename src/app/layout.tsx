@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import Toaster from '@/components/Toast'
 import { AppNameProvider } from '@/components/AppNameProvider'
-import { APP_NAME } from '@/lib/appName'
+import { APP_NAME, APP_SUBNAME } from '@/lib/appName'
 
 export const metadata: Metadata = {
   title: APP_NAME,
@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content={APP_NAME} />
       </head>
       <body suppressHydrationWarning>
-        <AppNameProvider name={APP_NAME}>{children}<Toaster /></AppNameProvider>
+        <AppNameProvider name={APP_NAME} subName={APP_SUBNAME}>{children}<Toaster /></AppNameProvider>
       </body>
     </html>
   )

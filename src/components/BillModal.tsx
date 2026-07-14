@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { fmtINR, fmtDate, nightsBetween, getPlanLabel } from '@/lib/utils'
 import { showToast } from '@/components/Toast'
-import { useAppName } from '@/components/AppNameProvider'
+import { useAppName, useAppSubName } from '@/components/AppNameProvider'
 
 interface Payment { amount: number }
 interface Booking {
@@ -13,6 +13,7 @@ interface Booking {
   subtotal: number; taxPercent: number; taxAmount: number; totalCost: number;
   advance: number; payments: Payment[];
   cancelled?: boolean; refundAmount?: number;
+  notes?: string | null;
 }
 
 // PDF-safe currency: jsPDF Helvetica has no Rs symbol (U+20B9)
@@ -24,13 +25,23 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
   booking: Booking; paid: number; pending: number; onClose: () => void
 }) {
   const appName = useAppName()
+  const appSubName = useAppSubName()
   const [step, setStep] = useState<'gst' | 'bill'>('gst')
   const [gstNo, setGstNo] = useState('')
+  const [editing, setEditing] = useState(false)
+  // Keeps DOM-only contentEditable edits (e.g. added notes) mounted after edit mode is turned off
+  const [everEdited, setEverEdited] = useState(false)
 
   const nights = nightsBetween(b.checkin, b.checkout)
   const invNo = 'INV-' + b.bookingRef
 
   function downloadBill() {
+    // Exit edit mode and let React repaint (drops the gold border/caret) before capturing
+    if (editing) setEditing(false)
+    setTimeout(capturePdf, editing ? 50 : 0)
+  }
+
+  function capturePdf() {
     const el = document.getElementById('bill-content')
     if (!el) return
     showToast('Preparing PDF…')
@@ -60,7 +71,7 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
 
   const roomTypeLabel = b.roomType ? ` (${b.roomType === 'DELUXE' ? 'Deluxe AC' : 'Standard Non-AC'})` : ''
   const rateLabel = ['AP','MAP','CP'].includes(b.planType)
-    ? `${b.guests} person${b.guests > 1 ? 's' : ''} x ${rs(b.ratePerUnit)}/head x ${nights} night${nights > 1 ? 's' : ''}${roomTypeLabel}`
+    ? `${b.guests} person${b.guests > 1 ? 's' : ''} x ${rs(b.ratePerUnit)}/head x ${nights} night${nights > 1 ? 's' : ''}${roomTypeLabel} · ${b.rooms} room${b.rooms > 1 ? 's' : ''}`
     : `${b.rooms} room${b.rooms > 1 ? 's' : ''}${roomTypeLabel} x ${rs(b.ratePerUnit)}/room x ${nights} night${nights > 1 ? 's' : ''}`
 
   if (step === 'gst') {
@@ -104,19 +115,35 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
           {/* Action buttons at the top */}
           <div style={{ display: 'flex', gap: '8px' }}>
             <button onClick={downloadBill} style={btnGreen}>⬇ Download</button>
+            <button
+              onClick={() => {
+                if (!editing) { setEverEdited(true); showToast('Tap any text on the bill to edit it') }
+                setEditing(e => !e)
+              }}
+              style={editing ? btnGreen : btnOutline}
+            >
+              {editing ? '✓ Done' : '✏ Edit'}
+            </button>
             <button onClick={shareBill} style={btnGold}>Share</button>
             <button onClick={onClose} style={btnOutline}>Close</button>
           </div>
         </div>
 
         <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1 }}>
-          {/* Bill preview */}
-          <div id="bill-content" style={{ background: '#fff', border: '2px dashed #D1DDD4', borderRadius: '12px', padding: '24px', marginBottom: '16px', fontFamily: 'Inter, sans-serif' }}>
+          {/* Bill preview — contentEditable lets the user tweak any text in place; the PDF is
+              rendered from this same DOM, so edits flow into the download */}
+          <div
+            id="bill-content"
+            contentEditable={editing}
+            suppressContentEditableWarning
+            style={{ background: '#fff', border: editing ? '2px dashed #C9A84C' : '2px dashed #D1DDD4', borderRadius: '12px', padding: '24px', marginBottom: '16px', fontFamily: 'Inter, sans-serif', outline: 'none' }}
+          >
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
               <div>
                 {/* PDF-safe font: jsPDF doc.html only draws built-in fonts — Syne metrics leave big word gaps */}
                 <div style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '18px', color: '#1B3A2D', fontWeight: 800, letterSpacing: 0 }}>{appName}</div>
+                {appSubName && <div style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '11px', color: '#718096' }}>{appSubName}</div>}
               </div>
               <div style={{ textAlign: 'right' }}>
                 {b.cancelled && <div style={{ fontWeight: 800, fontSize: '13px', color: '#C0392B', border: '2px solid #C0392B', borderRadius: '4px', padding: '2px 8px', display: 'inline-block', marginBottom: '4px' }}>CANCELLED</div>}
@@ -142,6 +169,7 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
                 {b.hotel.managerPhone && <div style={{ color: '#718096' }}>Manager Ph: {b.hotel.managerPhone}</div>}
                 <div style={{ color: '#718096' }}>Check-in: {fmtDate(b.checkin)}</div>
                 <div style={{ color: '#718096' }}>Check-out: {fmtDate(b.checkout)}</div>
+                <div style={{ color: '#718096' }}>Rooms: {b.rooms}</div>
               </div>
             </div>
 
@@ -189,6 +217,13 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
                 <span>Balance Due</span><span style={{ color: pending > 0 ? '#C0392B' : '#1E7E4E' }}>{pending > 0 ? rs(pending) : 'Rs. 0 (Cleared)'}</span>
               </div>
             </div>
+
+            {(b.notes || everEdited) && (
+              <div style={{ marginTop: '14px', padding: '10px 12px', background: '#F7FAF8', borderRadius: '8px', fontSize: '12px' }}>
+                <div style={{ fontWeight: 700, color: '#4A5568', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px' }}>Notes</div>
+                <div style={{ color: '#4A5568', whiteSpace: 'pre-wrap' }}>{b.notes || ' '}</div>
+              </div>
+            )}
 
             <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #EAF0EC', fontSize: '11px', color: '#718096', textAlign: 'center' }}>
               Thank you for choosing {b.hotel.name}! | Generated by {appName} | Ref: {b.bookingRef}
