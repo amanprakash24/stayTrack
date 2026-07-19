@@ -97,6 +97,8 @@ model Booking {
   planType    PlanType
   roomType    String?
   guests      Int
+  childGuests Int           @default(0)
+  childRate   Float         @default(0)
   rooms       Int
   ratePerUnit Float
   subtotal    Float

@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   const {
     guestName, phone, email, address,
     hotelId, checkin, checkout,
-    planType, roomType, guests, rooms, ratePerUnit,
+    planType, roomType, guests, childGuests, childRate, rooms, ratePerUnit,
     taxPercent, advance, notes,
     advanceMode, advanceReceivedBy, bookedBy,
   } = body
@@ -93,6 +93,8 @@ export async function POST(req: NextRequest) {
 
   const numRooms = Number(rooms) || 1
   const numGuests = Number(guests) || 1
+  const numChildren = Math.max(0, Number(childGuests) || 0)
+  const chRate = numChildren > 0 ? Math.max(0, Number(childRate) || 0) : 0
   const rate = Number(ratePerUnit)
   const tax = Number(taxPercent) || 0
   const adv = Number(advance) || 0
@@ -102,7 +104,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Payment mode and receiver name are required for the advance' }, { status: 400 })
   }
 
-  const subtotal = calcSubtotal(planType, numGuests, numRooms, rate, nights)
+  // Children are charged per child per day on top of the plan subtotal
+  const subtotal = calcSubtotal(planType, numGuests, numRooms, rate, nights) + numChildren * chRate * nights
   const taxAmount = Math.round(subtotal * tax / 100)
   const totalCost = subtotal + taxAmount
 
@@ -147,6 +150,8 @@ export async function POST(req: NextRequest) {
       planType,
       roomType: ['STANDARD', 'DELUXE'].includes(roomType) ? roomType : null,
       guests: numGuests,
+      childGuests: numChildren,
+      childRate: chRate,
       rooms: numRooms,
       ratePerUnit: rate,
       subtotal,

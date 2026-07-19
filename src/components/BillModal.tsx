@@ -9,7 +9,7 @@ interface Booking {
   id: string; bookingRef: string; guestName: string; phone: string; email?: string;
   hotel: { name: string; location: string; managerName?: string | null; managerPhone?: string | null };
   checkin: string; checkout: string;
-  planType: string; roomType?: string | null; guests: number; rooms: number; ratePerUnit: number;
+  planType: string; roomType?: string | null; guests: number; childGuests?: number; childRate?: number; rooms: number; ratePerUnit: number;
   subtotal: number; taxPercent: number; taxAmount: number; totalCost: number;
   advance: number; payments: Payment[];
   cancelled?: boolean; refundAmount?: number;
@@ -21,19 +21,21 @@ function rs(n: number) {
   return 'Rs. ' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
-export default function BillModal({ booking: b, paid, pending, onClose }: {
+export default function BillModal({ booking: b, paid, pending, onClose, onEditBooking }: {
   booking: Booking; paid: number; pending: number; onClose: () => void
+  // When provided, shows an "Edit Booking" button that jumps to the booking edit form
+  onEditBooking?: () => void
 }) {
   const appName = useAppName()
   const appSubName = useAppSubName()
   const [step, setStep] = useState<'gst' | 'bill'>('gst')
   const [gstNo, setGstNo] = useState('')
   const [editing, setEditing] = useState(false)
-  // Keeps DOM-only contentEditable edits (e.g. added notes) mounted after edit mode is turned off
-  const [everEdited, setEverEdited] = useState(false)
 
   const nights = nightsBetween(b.checkin, b.checkout)
   const invNo = 'INV-' + b.bookingRef
+  // Child charge is included in subtotal; split it back out as its own line item
+  const childAmount = (b.childGuests ?? 0) * (b.childRate ?? 0) * nights
 
   function downloadBill() {
     // Exit edit mode and let React repaint (drops the gold border/caret) before capturing
@@ -113,17 +115,18 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
         <div style={{ padding: '12px 20px', borderBottom: '1px solid #EAF0EC', flexShrink: 0 }}>
           <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '16px', color: '#1B3A2D', fontWeight: 800, marginBottom: '10px' }}>Invoice / Bill</div>
           {/* Action buttons at the top */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button onClick={downloadBill} style={btnGreen}>⬇ Download</button>
             <button
               onClick={() => {
-                if (!editing) { setEverEdited(true); showToast('Tap any text on the bill to edit it') }
+                if (!editing) showToast('Tap any text on the bill to edit it')
                 setEditing(e => !e)
               }}
               style={editing ? btnGreen : btnOutline}
             >
-              {editing ? '✓ Done' : '✏ Edit'}
+              {editing ? '✓ Done' : '✏ Edit Text'}
             </button>
+            {onEditBooking && <button onClick={onEditBooking} style={btnOutline}>📝 Edit Booking</button>}
             <button onClick={shareBill} style={btnGold}>Share</button>
             <button onClick={onClose} style={btnOutline}>Close</button>
           </div>
@@ -189,8 +192,18 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
                     <span style={{ fontSize: '11px', color: '#718096' }}>{rateLabel}</span>
                   </td>
                   <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#4A5568', fontSize: '11px' }}>{getPlanLabel(b.planType)}</td>
-                  <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', textAlign: 'right', fontWeight: 600 }}>{rs(b.subtotal)}</td>
+                  <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', textAlign: 'right', fontWeight: 600 }}>{rs(b.subtotal - childAmount)}</td>
                 </tr>
+                {childAmount > 0 && (
+                  <tr>
+                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#4A5568' }}>
+                      Children<br />
+                      <span style={{ fontSize: '11px', color: '#718096' }}>{b.childGuests} child{(b.childGuests ?? 0) > 1 ? 'ren' : ''} x {rs(b.childRate ?? 0)}/day x {nights} night{nights > 1 ? 's' : ''}</span>
+                    </td>
+                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC' }} />
+                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', textAlign: 'right', fontWeight: 600 }}>{rs(childAmount)}</td>
+                  </tr>
+                )}
                 {b.taxPercent > 0 && (
                   <tr>
                     <td colSpan={2} style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#718096', fontSize: '11px' }}>GST / Tax ({b.taxPercent}%)</td>
@@ -218,10 +231,10 @@ export default function BillModal({ booking: b, paid, pending, onClose }: {
               </div>
             </div>
 
-            {(b.notes || everEdited) && (
+            {b.notes && (
               <div style={{ marginTop: '14px', padding: '10px 12px', background: '#F7FAF8', borderRadius: '8px', fontSize: '12px' }}>
                 <div style={{ fontWeight: 700, color: '#4A5568', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px' }}>Notes</div>
-                <div style={{ color: '#4A5568', whiteSpace: 'pre-wrap' }}>{b.notes || ' '}</div>
+                <div style={{ color: '#4A5568', whiteSpace: 'pre-wrap' }}>{b.notes}</div>
               </div>
             )}
 

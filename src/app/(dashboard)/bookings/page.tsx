@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { fmtINR, fmtDateShort, getPlanLabel, totalPaid, PAYMENT_MODES, getPaymentModeLabel } from '@/lib/utils'
 import BillModal from '@/components/BillModal'
 import TourismBillModal from '@/components/TourismBillModal'
@@ -11,7 +12,7 @@ interface Hotel { id: string; name: string; location: string; tourismFee?: numbe
 interface Booking {
   id: string; bookingRef: string; guestName: string; phone: string; email?: string; address?: string;
   hotel: Hotel; checkin: string; checkout: string; planType: string; roomType?: string | null;
-  guests: number; rooms: number; ratePerUnit: number; subtotal: number;
+  guests: number; childGuests: number; childRate: number; rooms: number; ratePerUnit: number; subtotal: number;
   taxPercent: number; taxAmount: number; totalCost: number; advance: number;
   advanceMode?: string | null; advanceReceivedBy?: string | null;
   status: string; notes?: string; bookedBy?: string | null; createdBy: { name: string }; createdAt: string;
@@ -27,6 +28,7 @@ const FILTERS = [
 ]
 
 export default function BookingsPage() {
+  const router = useRouter()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -225,7 +227,7 @@ export default function BookingsPage() {
                   <div style={{ fontWeight: 700, fontSize: '15px', color: '#1B3A2D' }}>{b.guestName} <span style={{ fontSize: '11px', color: '#718096', fontWeight: 500 }}>· {b.bookingRef}</span></div>
                   <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>🏨 {b.hotel.name} · {b.hotel.location}</div>
                   <div style={{ fontSize: '11px', color: '#4A5568', marginTop: '4px' }}>
-                    📅 {fmtDateShort(b.checkin)} → {fmtDateShort(b.checkout)} · {b.guests} guest{b.guests > 1 ? 's' : ''} · {b.rooms} room{b.rooms > 1 ? 's' : ''}{b.roomType ? ` (${b.roomType === 'DELUXE' ? 'Deluxe AC' : 'Std Non-AC'})` : ''}
+                    📅 {fmtDateShort(b.checkin)} → {fmtDateShort(b.checkout)} · {b.guests} guest{b.guests > 1 ? 's' : ''}{b.childGuests ? ` + ${b.childGuests} child${b.childGuests > 1 ? 'ren' : ''}` : ''} · {b.rooms} room{b.rooms > 1 ? 's' : ''}{b.roomType ? ` (${b.roomType === 'DELUXE' ? 'Deluxe AC' : 'Std Non-AC'})` : ''}
                   </div>
                   <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>{getPlanLabel(b.planType)}</div>
                 </div>
@@ -275,6 +277,10 @@ export default function BookingsPage() {
                 <button onClick={() => setShowTourismBill(true)} style={{ ...btnOutline, color: '#C9A84C', borderColor: '#C9A84C' }}>
                   🏞 Tourism Bill
                 </button>
+                {/* Editing is admin/partner only (server enforces it too) */}
+                {!isStaff && !selected.cancelled && (
+                  <button onClick={() => router.push(`/add?edit=${selected.id}`)} style={btnOutline}>✏ Edit</button>
+                )}
                 <button onClick={() => setSelected(null)} style={btnOutline}>Close</button>
               </div>
             </div>
@@ -286,7 +292,8 @@ export default function BookingsPage() {
                 {[
                   ['Phone', selected.phone], ['Email', selected.email || '—'],
                   ['Check-in', fmtDateShort(selected.checkin)], ['Check-out', fmtDateShort(selected.checkout)],
-                  ['Guests', selected.guests], ['Rooms', `${selected.rooms}${selected.roomType ? ` · ${selected.roomType === 'DELUXE' ? 'Deluxe AC' : 'Standard Non-AC'}` : ''}`],
+                  ['Guests', `${selected.guests}${selected.childGuests ? ` + ${selected.childGuests} child${selected.childGuests > 1 ? 'ren' : ''}` : ''}`],
+                  ['Rooms', `${selected.rooms}${selected.roomType ? ` · ${selected.roomType === 'DELUXE' ? 'Deluxe AC' : 'Standard Non-AC'}` : ''}`],
                   ['Plan', getPlanLabel(selected.planType)], ['Ref', selected.bookingRef],
                   ['Booked By', selected.bookedBy ?? selected.createdBy.name], ['Account', selected.createdBy.name],
                 ].map(([k, v]) => (
@@ -473,7 +480,13 @@ export default function BookingsPage() {
 
       {/* Bill Modal */}
       {showBill && selected && (
-        <BillModal booking={selected} paid={paid} pending={pending} onClose={() => setShowBill(false)} />
+        <BillModal
+          booking={selected}
+          paid={paid}
+          pending={pending}
+          onClose={() => setShowBill(false)}
+          onEditBooking={!isStaff && !selected.cancelled ? () => router.push(`/add?edit=${selected.id}`) : undefined}
+        />
       )}
     </>
   )
