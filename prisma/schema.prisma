@@ -75,7 +75,7 @@ model Hotel {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  bookings Booking[]
+  legs     BookingLeg[]
   partners User[]
   expenses Expense[]
 }
@@ -89,22 +89,9 @@ model Booking {
   email     String?
   address   String?
 
-  hotelId  String
-  hotel    Hotel    @relation(fields: [hotelId], references: [id])
-  checkin  DateTime
-  checkout DateTime
-
-  planType    PlanType
-  roomType    String?
-  guests      Int
-  childGuests Int           @default(0)
-  childRate   Float         @default(0)
-  rooms       Int
-  ratePerUnit Float
-  subtotal    Float
-  taxPercent  Float         @default(0)
-  taxAmount   Float         @default(0)
-  totalCost   Float
+  subtotal  Float         @default(0)
+  taxAmount Float         @default(0)
+  totalCost Float         @default(0)
 
   advance           Float         @default(0)
   advanceMode       PaymentMode?
@@ -129,9 +116,40 @@ model Booking {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  legs      BookingLeg[]
   payments  Payment[]
   auditLogs AuditLog[]
   expenses  Expense[]
+}
+
+model BookingLeg {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  order     Int      @default(0)
+
+  hotelId  String
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  checkin  DateTime
+  checkout DateTime
+
+  planType    PlanType
+  roomType    String?
+  guests      Int
+  childGuests Int      @default(0)
+  childRate   Float    @default(0)
+  rooms       Int
+  ratePerUnit Float
+  subtotal    Float
+  taxPercent  Float    @default(0)
+  taxAmount   Float    @default(0)
+  totalCost   Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([hotelId, checkin, checkout])
 }
 
 model Payment {

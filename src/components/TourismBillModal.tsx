@@ -4,10 +4,14 @@ import { fmtDate } from '@/lib/utils'
 import { showToast } from './Toast'
 import { useAppName, useAppSubName } from '@/components/AppNameProvider'
 
+interface Leg {
+  id: string; order: number
+  hotel: { name: string; location: string; tourismFee?: number | null }
+  checkin: string; checkout: string; guests: number
+}
 interface Booking {
   id: string; bookingRef: string; guestName: string; phone: string;
-  hotel: { name: string; location: string; tourismFee?: number | null; managerName?: string | null; managerPhone?: string | null };
-  checkin: string; checkout: string; guests: number;
+  legs: Leg[];
 }
 
 // PDF-safe currency: jsPDF Helvetica has no Rs symbol (U+20B9)
@@ -18,20 +22,27 @@ function rs(n: number) {
 export default function TourismBillModal({ booking: b, onClose }: { booking: Booking; onClose: () => void }) {
   const appName = useAppName()
   const appSubName = useAppSubName()
+  const legs = [...b.legs].sort((x, y) => x.order - y.order)
+
   const [step, setStep] = useState<'input' | 'bill'>('input')
-  const [feeInput, setFeeInput] = useState(b.hotel.tourismFee ? String(b.hotel.tourismFee) : '')
-  const [guestsInput, setGuestsInput] = useState(String(b.guests))
+  const [rows, setRows] = useState(() => legs.map(l => ({
+    legId: l.id, fee: l.hotel.tourismFee ? String(l.hotel.tourismFee) : '', guests: String(l.guests),
+  })))
   const [gstNo, setGstNo] = useState('')
   const [editing, setEditing] = useState(false)
 
-  const fee = Number(feeInput) || 0
-  const guests = Number(guestsInput) || 0
-  const total = fee * guests
+  const computed = rows.map((r, i) => ({ legId: r.legId, leg: legs[i], fee: Number(r.fee) || 0, guests: Number(r.guests) || 0 }))
+  const total = computed.reduce((s, r) => s + r.fee * r.guests, 0)
   const billNo = 'TF-' + b.bookingRef
+  const hotelNames = [...new Set(legs.map(l => l.hotel.name))].join(' & ')
+
+  function setRow(i: number, field: 'fee' | 'guests', value: string) {
+    setRows(rs2 => rs2.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)))
+  }
 
   function generate() {
-    if (!fee || fee <= 0) { showToast('Enter the fee per guest'); return }
-    if (!guests || guests <= 0) { showToast('Enter number of people'); return }
+    if (computed.some(r => !r.fee || r.fee <= 0)) { showToast('Enter the fee per guest for every stay'); return }
+    if (computed.some(r => !r.guests || r.guests <= 0)) { showToast('Enter number of people for every stay'); return }
     setStep('bill')
   }
 
@@ -60,35 +71,41 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
   if (step === 'input') {
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-        <div style={{ background: '#fff', borderRadius: '16px', padding: '28px 24px', width: '100%', maxWidth: '360px', boxShadow: '0 12px 40px rgba(0,0,0,0.18)' }}>
+        <div style={{ background: '#fff', borderRadius: '16px', padding: '28px 24px', width: '100%', maxWidth: '380px', maxHeight: '86vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.18)' }}>
           <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '17px', fontWeight: 800, color: '#1B3A2D', marginBottom: '6px' }}>State Tourism Fee Bill</div>
           <div style={{ fontSize: '12px', color: '#718096', marginBottom: '20px' }}>
-            {b.hotel.name.trim()} · {b.guestName} · {b.bookingRef}
+            {hotelNames} · {b.guestName} · {b.bookingRef}
           </div>
 
-          <div style={{ marginBottom: '14px' }}>
-            <label style={inputLbl}>Fee Per Guest (₹) *</label>
-            <input
-              style={inputBox}
-              type="number"
-              min="1"
-              placeholder="e.g. 50"
-              value={feeInput}
-              onChange={e => setFeeInput(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <div style={{ marginBottom: '14px' }}>
-            <label style={inputLbl}>Number of People *</label>
-            <input
-              style={inputBox}
-              type="number"
-              min="1"
-              placeholder="e.g. 2"
-              value={guestsInput}
-              onChange={e => setGuestsInput(e.target.value)}
-            />
-          </div>
+          {legs.map((l, i) => (
+            <div key={l.id} style={{ marginBottom: '14px', paddingBottom: '14px', borderBottom: i < legs.length - 1 ? '1px solid #EAF0EC' : 'none' }}>
+              {legs.length > 1 && <div style={{ fontSize: '12px', fontWeight: 700, color: '#1B3A2D', marginBottom: '8px' }}>{i + 1}. {l.hotel.name} · {l.hotel.location}</div>}
+              <div style={{ marginBottom: '10px' }}>
+                <label style={inputLbl}>Fee Per Guest (₹) *</label>
+                <input
+                  style={inputBox}
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 50"
+                  value={rows[i].fee}
+                  onChange={e => setRow(i, 'fee', e.target.value)}
+                  autoFocus={i === 0}
+                />
+              </div>
+              <div>
+                <label style={inputLbl}>Number of People *</label>
+                <input
+                  style={inputBox}
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 2"
+                  value={rows[i].guests}
+                  onChange={e => setRow(i, 'guests', e.target.value)}
+                />
+              </div>
+            </div>
+          ))}
+
           <div style={{ marginBottom: '14px' }}>
             <label style={inputLbl}>GST Number <span style={{ color: '#718096', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
             <input
@@ -100,9 +117,9 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
             />
           </div>
 
-          {fee > 0 && guests > 0 && (
+          {total > 0 && (
             <div style={{ background: '#EAF0EC', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#1B3A2D', fontWeight: 700, marginBottom: '16px', textAlign: 'center' }}>
-              {guests} × ₹{fee.toLocaleString('en-IN')} = ₹{total.toLocaleString('en-IN')}
+              Total: ₹{total.toLocaleString('en-IN')}
             </div>
           )}
 
@@ -160,7 +177,7 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
             </div>
 
             <div style={{ background: '#EAF0EC', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#1B3A2D', textAlign: 'center', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              State Tourism Fee : One-Time Charge Per Guest
+              State Tourism Fee : One-Time Charge Per Guest Per Stay
             </div>
 
             {/* Guest / stay details */}
@@ -171,13 +188,24 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
                 <div style={{ color: '#718096' }}>{b.phone}</div>
                 <div style={{ color: '#718096' }}>Booking Ref: {b.bookingRef}</div>
               </div>
-              <div>
-                <div style={{ fontWeight: 700, color: '#4A5568', marginBottom: '4px', fontSize: '11px', textTransform: 'uppercase' }}>Property</div>
-                <div style={{ fontWeight: 700, color: '#1B3A2D' }}>{b.hotel.name}</div>
-                <div style={{ color: '#718096' }}>{b.hotel.location}</div>
-                {/* PDF-safe: jsPDF Helvetica cannot render the arrow character */}
-                <div style={{ color: '#718096' }}>Stay: {fmtDate(b.checkin)} to {fmtDate(b.checkout)}</div>
-              </div>
+              {legs.length === 1 ? (
+                <div>
+                  <div style={{ fontWeight: 700, color: '#4A5568', marginBottom: '4px', fontSize: '11px', textTransform: 'uppercase' }}>Property</div>
+                  <div style={{ fontWeight: 700, color: '#1B3A2D' }}>{legs[0].hotel.name}</div>
+                  <div style={{ color: '#718096' }}>{legs[0].hotel.location}</div>
+                  {/* PDF-safe: jsPDF Helvetica cannot render the arrow character */}
+                  <div style={{ color: '#718096' }}>Stay: {fmtDate(legs[0].checkin)} to {fmtDate(legs[0].checkout)}</div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontWeight: 700, color: '#4A5568', marginBottom: '4px', fontSize: '11px', textTransform: 'uppercase' }}>Itinerary</div>
+                  {legs.map((l, i) => (
+                    <div key={l.id} style={{ color: '#718096', marginBottom: '2px' }}>
+                      {i + 1}. {l.hotel.name} ({fmtDate(l.checkin)} to {fmtDate(l.checkout)})
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Fee table */}
@@ -191,12 +219,14 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style={{ ...td, textAlign: 'left' }}>State Tourism Fee ({b.hotel.location.trim()}) - one-time</td>
-                  <td style={td}>{guests}</td>
-                  <td style={td}>{rs(fee)}</td>
-                  <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{rs(total)}</td>
-                </tr>
+                {computed.map(r => (
+                  <tr key={r.legId}>
+                    <td style={{ ...td, textAlign: 'left' }}>State Tourism Fee ({r.leg.hotel.location.trim()}) - one-time</td>
+                    <td style={td}>{r.guests}</td>
+                    <td style={td}>{rs(r.fee)}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{rs(r.fee * r.guests)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
 
@@ -207,7 +237,7 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
             </div>
 
             <div style={{ borderTop: '1px solid #EAF0EC', paddingTop: '10px', fontSize: '10px', color: '#718096', textAlign: 'center' }}>
-              Thank you for choosing {b.hotel.name}! | Generated by {appName} | Ref: {b.bookingRef}
+              Thank you for choosing {hotelNames}! | Generated by {appName} | Ref: {b.bookingRef}
             </div>
           </div>
         </div>

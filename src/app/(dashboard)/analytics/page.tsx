@@ -10,7 +10,8 @@ interface LocationData { name: string; revenue: number }
 interface PartnerData { name: string; count: number }
 interface RawBooking {
   bookingRef: string; guestName: string; phone: string; location: string; hotel: string;
-  totalCost: number; advance: number; paid: number; pending: number; status: string;
+  legNo: number; totalLegs: number; legTotalCost: number; bookingTotalCost: number;
+  advance: number; paid: number; pending: number; status: string;
   checkin: string; checkout: string; createdBy: string; planType: string;
 }
 interface RawExpense {
@@ -125,9 +126,10 @@ export default function AnalyticsPage() {
     })
     utils.book_append_sheet(wb, utils.json_to_sheet(summaryRows), 'Hotel Summary')
 
-    // Sheet 2: Bookings
+    // Sheet 2: Bookings (one row per hotel stay; multi-hotel bookings span several rows)
     const bookingRows = data.rawBookings.map(b => ({
       'Booking Ref': b.bookingRef,
+      'Stay': b.totalLegs > 1 ? `${b.legNo} of ${b.totalLegs}` : '1 of 1',
       'Guest Name': b.guestName,
       'Phone': b.phone,
       'Location': b.location,
@@ -135,7 +137,8 @@ export default function AnalyticsPage() {
       'Plan': b.planType,
       'Check-in': b.checkin,
       'Check-out': b.checkout,
-      'Total Cost': b.totalCost,
+      'Stay Cost': b.legTotalCost,
+      'Booking Total': b.bookingTotalCost,
       'Advance': b.advance,
       'Total Paid': b.paid,
       'Pending': b.pending,
@@ -348,8 +351,8 @@ export default function AnalyticsPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                 <thead>
                   <tr style={{ background: '#EAF0EC' }}>
-                    {['Ref', 'Client', 'Phone', 'Location', 'Total', 'Advance', 'Paid', 'Pending', 'Status', 'Partner'].map(h => (
-                      <th key={h} style={{ padding: '8px', textAlign: ['Total', 'Advance', 'Paid', 'Pending'].includes(h) ? 'right' : 'left', color: '#4A5568', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                    {['Ref', 'Client', 'Phone', 'Location', 'Stay Total', 'Advance', 'Paid', 'Pending', 'Status', 'Partner'].map(h => (
+                      <th key={h} style={{ padding: '8px', textAlign: ['Stay Total', 'Advance', 'Paid', 'Pending'].includes(h) ? 'right' : 'left', color: '#4A5568', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -357,12 +360,12 @@ export default function AnalyticsPage() {
                   {data.rawBookings.map(b => {
                     const sColor = b.status === 'PAID' ? '#1E7E4E' : b.status === 'PARTIAL' ? '#B7791F' : '#C0392B'
                     return (
-                      <tr key={b.bookingRef} style={{ borderBottom: '1px solid #EAF0EC' }}>
-                        <td style={{ padding: '8px', color: '#718096', whiteSpace: 'nowrap' as const }}>{b.bookingRef}</td>
+                      <tr key={`${b.bookingRef}-${b.legNo}`} style={{ borderBottom: '1px solid #EAF0EC' }}>
+                        <td style={{ padding: '8px', color: '#718096', whiteSpace: 'nowrap' as const }}>{b.bookingRef}{b.totalLegs > 1 ? ` (${b.legNo}/${b.totalLegs})` : ''}</td>
                         <td style={{ padding: '8px', fontWeight: 500 }}>{b.guestName}</td>
                         <td style={{ padding: '8px', color: '#718096' }}>{b.phone}</td>
                         <td style={{ padding: '8px' }}>{b.location}</td>
-                        <td style={{ padding: '8px', textAlign: 'right' as const }}>{fmtINR(b.totalCost)}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' as const }}>{fmtINR(b.legTotalCost)}</td>
                         <td style={{ padding: '8px', textAlign: 'right' as const, color: '#1E7E4E' }}>{fmtINR(b.advance)}</td>
                         <td style={{ padding: '8px', textAlign: 'right' as const, color: '#1E7E4E' }}>{fmtINR(b.paid)}</td>
                         <td style={{ padding: '8px', textAlign: 'right' as const, color: '#C0392B' }}>{b.pending > 0 ? fmtINR(b.pending) : '—'}</td>

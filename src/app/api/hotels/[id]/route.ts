@@ -40,6 +40,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // Permanently deletes the hotel and ALL its data (bookings + payments, expenses,
 // related history logs). Staff logins of the hotel are detached and disabled.
 // Use PATCH { active: false } for the reversible deactivate instead.
+//
+// Any booking with a stay at this hotel is deleted in full, even if it also
+// includes stays at other hotels — this is a permanent hotel-wipe operation, and
+// leaving a half-deleted itinerary behind would be more confusing than losing it.
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession()
   if (!session || session.role !== 'SUPERADMIN') {
@@ -47,16 +51,20 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   }
   const { id } = await params
 
-  const hotel = await prisma.hotel.findUnique({
-    where: { id },
-    include: { _count: { select: { bookings: true, expenses: true } } },
-  })
+  const hotel = await prisma.hotel.findUnique({ where: { id } })
   if (!hotel) return NextResponse.json({ error: 'Hotel not found' }, { status: 404 })
 
+  const affectedBookings = await prisma.booking.findMany({
+    where: { legs: { some: { hotelId: id } } },
+    select: { id: true },
+  })
+  const bookingIds = affectedBookings.map((b) => b.id)
+  const expenseCount = await prisma.expense.count({ where: { hotelId: id } })
+
   await prisma.$transaction([
-    prisma.auditLog.deleteMany({ where: { booking: { hotelId: id } } }),
+    prisma.auditLog.deleteMany({ where: { bookingId: { in: bookingIds } } }),
     prisma.expense.deleteMany({ where: { hotelId: id } }),
-    prisma.booking.deleteMany({ where: { hotelId: id } }), // payments cascade
+    prisma.booking.deleteMany({ where: { id: { in: bookingIds } } }), // legs + payments cascade
     prisma.user.updateMany({ where: { role: 'STAFF', hotelId: id }, data: { active: false, hotelId: null } }),
     prisma.user.updateMany({ where: { role: 'PARTNER', hotelId: id }, data: { hotelId: null } }),
     prisma.hotel.delete({ where: { id } }),
@@ -65,9 +73,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   await prisma.auditLog.create({
     data: {
       userId: session.userId,
-      action: `Permanently deleted hotel "${hotel.name.trim()}" with ${hotel._count.bookings} booking(s) and ${hotel._count.expenses} expense(s)`,
+      action: `Permanently deleted hotel "${hotel.name.trim()}" with ${bookingIds.length} booking(s) and ${expenseCount} expense(s)`,
     },
   })
 
-  return NextResponse.json({ ok: true, bookings: hotel._count.bookings, expenses: hotel._count.expenses })
+  return NextResponse.json({ ok: true, bookings: bookingIds.length, expenses: expenseCount })
 }

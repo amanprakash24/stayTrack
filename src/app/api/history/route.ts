@@ -9,7 +9,7 @@ export async function GET() {
   const logs = await prisma.auditLog.findMany({
     // Staff only see activity of their own hotel (plus their own actions)
     where: session.role === 'STAFF'
-      ? { OR: [{ booking: { hotelId: session.hotelId ?? '' } }, { userId: session.userId }] }
+      ? { OR: [{ booking: { legs: { some: { hotelId: session.hotelId ?? '' } } } }, { userId: session.userId }] }
       : undefined,
     include: { user: { select: { name: true, role: true } } },
     orderBy: { createdAt: 'desc' },

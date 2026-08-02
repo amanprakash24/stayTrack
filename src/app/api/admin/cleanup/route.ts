@@ -27,9 +27,10 @@ export async function POST(req: NextRequest) {
 
   const now = new Date()
   const bookingWhere = {
-    checkout: { gte: fromDate, lte: toDate },
-    // never touch upcoming or ongoing stays
-    OR: [{ cancelled: true }, { checkout: { lt: now } }],
+    // at least one stay ends in the target window...
+    legs: { some: { checkout: { gte: fromDate, lte: toDate } } },
+    // ...and never touch a booking with an upcoming or ongoing stay in ANY leg
+    OR: [{ cancelled: true }, { legs: { none: { checkout: { gt: now } } } }],
   }
   const expenseWhere = { date: { gte: fromDate, lte: toDate } }
   const logWhere = { createdAt: { gte: fromDate, lte: toDate } }
@@ -47,11 +48,11 @@ export async function POST(req: NextRequest) {
       prisma.booking.findMany({
         where: bookingWhere,
         include: {
-          hotel: { select: { name: true, location: true } },
+          legs: { include: { hotel: { select: { name: true, location: true } } }, orderBy: { order: 'asc' } },
           createdBy: { select: { name: true } },
           payments: { select: { amount: true, mode: true, receivedBy: true, note: true, createdAt: true } },
         },
-        orderBy: { checkout: 'asc' },
+        orderBy: { createdAt: 'asc' },
       }),
       prisma.expense.findMany({
         where: expenseWhere,
@@ -72,13 +73,6 @@ export async function POST(req: NextRequest) {
           bookingRef: b.bookingRef,
           guestName: b.guestName,
           phone: b.phone,
-          hotel: b.hotel.name,
-          location: b.hotel.location,
-          checkin: b.checkin,
-          checkout: b.checkout,
-          planType: b.planType,
-          guests: b.guests,
-          rooms: b.rooms,
           totalCost: b.totalCost,
           advance: b.advance,
           totalPaid: b.advance + b.payments.reduce((s, p) => s + p.amount, 0),
@@ -87,6 +81,16 @@ export async function POST(req: NextRequest) {
           bookedBy: b.bookedBy ?? '',
           createdBy: b.createdBy.name,
           notes: b.notes,
+          legs: b.legs.map(l => ({
+            hotel: l.hotel.name,
+            location: l.hotel.location,
+            checkin: l.checkin,
+            checkout: l.checkout,
+            planType: l.planType,
+            guests: l.guests,
+            rooms: l.rooms,
+            totalCost: l.totalCost,
+          })),
           payments: b.payments.map(p => ({
             bookingRef: b.bookingRef,
             guestName: b.guestName,

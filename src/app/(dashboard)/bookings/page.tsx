@@ -9,17 +9,23 @@ import { showToast } from '@/components/Toast'
 interface Payment { id: string; amount: number; mode?: string | null; receivedBy?: string | null; note?: string; recordedBy: { name: string }; createdAt: string }
 interface AuditLog { id: string; action: string; user: { name: string }; createdAt: string }
 interface Hotel { id: string; name: string; location: string; tourismFee?: number | null; managerName?: string | null; managerPhone?: string | null }
+interface Leg {
+  id: string; order: number; hotel: Hotel;
+  checkin: string; checkout: string; planType: string; roomType?: string | null;
+  guests: number; childGuests?: number; childRate?: number; rooms: number; ratePerUnit: number;
+  subtotal: number; taxPercent: number; taxAmount: number; totalCost: number;
+}
 interface Booking {
   id: string; bookingRef: string; guestName: string; phone: string; email?: string; address?: string;
-  hotel: Hotel; checkin: string; checkout: string; planType: string; roomType?: string | null;
-  guests: number; childGuests: number; childRate: number; rooms: number; ratePerUnit: number; subtotal: number;
-  taxPercent: number; taxAmount: number; totalCost: number; advance: number;
+  legs: Leg[]; subtotal: number; taxAmount: number; totalCost: number; advance: number;
   advanceMode?: string | null; advanceReceivedBy?: string | null;
   status: string; notes?: string; bookedBy?: string | null; createdBy: { name: string }; createdAt: string;
   cancelled: boolean; cancelledAt?: string | null; cancelledBy?: string | null; cancellationReason?: string | null;
   refundType?: string | null; refundAmount: number; refundMode?: string | null; refundBy?: string | null;
   payments: Payment[]; auditLogs: AuditLog[];
 }
+
+function sortedLegs(b: Booking) { return [...b.legs].sort((a, c) => a.order - c.order) }
 
 const FILTERS = [
   { key: 'all', label: 'All' }, { key: 'partial', label: 'Partial' },
@@ -63,7 +69,7 @@ export default function BookingsPage() {
     const data = await res.json()
     setBookings(Array.isArray(data) ? data : [])
     // Extract unique locations
-    const locs = [...new Set((Array.isArray(data) ? data : []).map((b: Booking) => b.hotel.location))] as string[]
+    const locs = [...new Set((Array.isArray(data) ? data : []).flatMap((b: Booking) => b.legs.map(l => l.hotel.location)))] as string[]
     if (locs.length) setLocations(locs)
     setLoading(false)
   }, [filter, search, locFilter])
@@ -73,6 +79,7 @@ export default function BookingsPage() {
   async function openBooking(b: Booking) {
     const res = await fetch(`/api/bookings/${b.id}`)
     const data = await res.json()
+    if (!res.ok) { showToast(data.error ?? 'Failed to load booking'); return }
     setSelected(data)
     setPayAmt('')
     setPayMode('CASH')
@@ -137,11 +144,13 @@ export default function BookingsPage() {
     loadBookings()
   }
 
-  // Cancellation is allowed until the end of the checkout day
-  const checkoutPassed = (checkout: string) => {
-    const end = new Date(checkout)
-    end.setHours(23, 59, 59, 999)
-    return new Date() > end
+  // Cancellation is allowed until the end of the LAST stay's checkout day
+  const checkoutPassed = (b: Booking) => {
+    const legs = sortedLegs(b)
+    if (!legs.length) return true
+    const lastCheckout = new Date(Math.max(...legs.map(l => new Date(l.checkout).getTime())))
+    lastCheckout.setHours(23, 59, 59, 999)
+    return new Date() > lastCheckout
   }
 
   const paid = selected ? totalPaid(selected.advance, selected.payments) : 0
@@ -220,16 +229,41 @@ export default function BookingsPage() {
           const p = totalPaid(b.advance, b.payments)
           const pend = b.cancelled ? 0 : Math.max(0, b.totalCost - p)
           const sc = statusColor(bStatus(b))
+          const legs = sortedLegs(b)
+          const primary = legs[0]
+          const totalGuests = legs.reduce((s, l) => s + l.guests, 0)
+          const totalChildren = legs.reduce((s, l) => s + (l.childGuests ?? 0), 0)
+          const totalRooms = legs.reduce((s, l) => s + l.rooms, 0)
           return (
             <div key={b.id} onClick={isStaff ? undefined : () => openBooking(b)} style={{ ...bookingCard, cursor: isStaff ? 'default' : 'pointer', opacity: b.cancelled ? 0.65 : 1 }}>
               <div style={{ padding: '14px 16px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '15px', color: '#1B3A2D' }}>{b.guestName} <span style={{ fontSize: '11px', color: '#718096', fontWeight: 500 }}>· {b.bookingRef}</span></div>
-                  <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>🏨 {b.hotel.name} · {b.hotel.location}</div>
-                  <div style={{ fontSize: '11px', color: '#4A5568', marginTop: '4px' }}>
-                    📅 {fmtDateShort(b.checkin)} → {fmtDateShort(b.checkout)} · {b.guests} guest{b.guests > 1 ? 's' : ''}{b.childGuests ? ` + ${b.childGuests} child${b.childGuests > 1 ? 'ren' : ''}` : ''} · {b.rooms} room{b.rooms > 1 ? 's' : ''}{b.roomType ? ` (${b.roomType === 'DELUXE' ? 'Deluxe AC' : 'Std Non-AC'})` : ''}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>{getPlanLabel(b.planType)}</div>
+                  {legs.length === 1 ? (
+                    <>
+                      <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>
+                        🏨 {primary.hotel.name} · {primary.hotel.location}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#4A5568', marginTop: '4px' }}>
+                        📅 {fmtDateShort(primary.checkin)} → {fmtDateShort(primary.checkout)} · {totalGuests} guest{totalGuests > 1 ? 's' : ''}{totalChildren ? ` + ${totalChildren} child${totalChildren > 1 ? 'ren' : ''}` : ''} · {totalRooms} room{totalRooms > 1 ? 's' : ''}{primary.roomType ? ` (${primary.roomType === 'DELUXE' ? 'Deluxe AC' : 'Std Non-AC'})` : ''}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>
+                        {getPlanLabel(primary.planType)}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ marginTop: '4px' }}>
+                      <div style={{ fontSize: '11px', color: '#718096', marginBottom: '3px' }}>
+                        {legs.length} stays · {totalGuests} guest{totalGuests > 1 ? 's' : ''}{totalChildren ? ` + ${totalChildren} child${totalChildren > 1 ? 'ren' : ''}` : ''} · {totalRooms} room{totalRooms > 1 ? 's' : ''} total
+                      </div>
+                      {legs.map((l, i) => (
+                        <div key={l.id} style={{ fontSize: '11px', color: '#4A5568', padding: '3px 0', borderTop: i > 0 ? '1px dashed #EAF0EC' : 'none' }}>
+                          <span style={{ fontWeight: 700, color: '#1B3A2D' }}>{i + 1}.</span>{' '}
+                          🏨 {l.hotel.name} · {l.hotel.location} · 📅 {fmtDateShort(l.checkin)} → {fmtDateShort(l.checkout)} · {l.guests}{l.childGuests ? `+${l.childGuests}c` : ''} guest{l.guests > 1 ? 's' : ''} · {l.rooms} room{l.rooms > 1 ? 's' : ''} · {getPlanLabel(l.planType)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
                   <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>
@@ -265,7 +299,10 @@ export default function BookingsPage() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <div>
                   <div style={{ fontFamily: 'Syne, sans-serif', fontSize: '17px', color: '#1B3A2D', fontWeight: 800 }}>{selected.guestName}</div>
-                  <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>{selected.hotel.name} · {selected.hotel.location}</div>
+                  <div style={{ fontSize: '12px', color: '#718096', marginTop: '2px' }}>
+                    {sortedLegs(selected)[0].hotel.name} · {sortedLegs(selected)[0].hotel.location}
+                    {selected.legs.length > 1 ? ` +${selected.legs.length - 1} more` : ''}
+                  </div>
                 </div>
                 <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: statusColor(bStatus(selected)).bg, color: statusColor(bStatus(selected)).color }}>
                   {statusLabel(bStatus(selected))}
@@ -291,13 +328,25 @@ export default function BookingsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px', marginBottom: '20px' }}>
                 {[
                   ['Phone', selected.phone], ['Email', selected.email || '—'],
-                  ['Check-in', fmtDateShort(selected.checkin)], ['Check-out', fmtDateShort(selected.checkout)],
-                  ['Guests', `${selected.guests}${selected.childGuests ? ` + ${selected.childGuests} child${selected.childGuests > 1 ? 'ren' : ''}` : ''}`],
-                  ['Rooms', `${selected.rooms}${selected.roomType ? ` · ${selected.roomType === 'DELUXE' ? 'Deluxe AC' : 'Standard Non-AC'}` : ''}`],
-                  ['Plan', getPlanLabel(selected.planType)], ['Ref', selected.bookingRef],
+                  ['Ref', selected.bookingRef],
                   ['Booked By', selected.bookedBy ?? selected.createdBy.name], ['Account', selected.createdBy.name],
                 ].map(([k, v]) => (
                   <div key={String(k)}><span style={{ color: '#718096' }}>{k}</span><br /><strong>{v}</strong></div>
+                ))}
+              </div>
+
+              {/* Itinerary — one or more hotel stays under this booking */}
+              <div style={sectionTitle}>Itinerary{selected.legs.length > 1 ? ` (${selected.legs.length} stays)` : ''}</div>
+              <div style={{ marginBottom: '20px' }}>
+                {sortedLegs(selected).map((l, i) => (
+                  <div key={l.id} style={{ background: '#F7FAF8', borderRadius: '8px', padding: '10px 12px', marginBottom: '8px', fontSize: '13px' }}>
+                    {selected.legs.length > 1 && <div style={{ fontSize: '11px', fontWeight: 700, color: '#1B3A2D', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Stay {i + 1} of {selected.legs.length}</div>}
+                    <div style={{ fontWeight: 700, color: '#1B3A2D' }}>{l.hotel.name} · {l.hotel.location}</div>
+                    <div style={{ color: '#4A5568', marginTop: '2px' }}>
+                      📅 {fmtDateShort(l.checkin)} → {fmtDateShort(l.checkout)} · {l.guests} guest{l.guests > 1 ? 's' : ''}{l.childGuests ? ` + ${l.childGuests} child${l.childGuests > 1 ? 'ren' : ''}` : ''} · {l.rooms} room{l.rooms > 1 ? 's' : ''}{l.roomType ? ` (${l.roomType === 'DELUXE' ? 'Deluxe AC' : 'Std Non-AC'})` : ''}
+                    </div>
+                    <div style={{ color: '#718096', marginTop: '2px' }}>{getPlanLabel(l.planType)} · {fmtINR(l.totalCost)}</div>
+                  </div>
                 ))}
               </div>
               {selected.notes && <div style={{ fontSize: '12px', color: '#718096', marginBottom: '16px' }}>📝 {selected.notes}</div>}
@@ -338,7 +387,7 @@ export default function BookingsPage() {
                 </div>
                 {selected.taxAmount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#718096', paddingTop: '4px' }}>
-                    <span>Tax ({selected.taxPercent}%)</span><span>{fmtINR(selected.taxAmount)}</span>
+                    <span>Tax{selected.legs.length > 1 ? ' (across all stays)' : ` (${sortedLegs(selected)[0].taxPercent}%)`}</span><span>{fmtINR(selected.taxAmount)}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600, color: pending > 0 ? '#C0392B' : '#1E7E4E', paddingTop: '4px' }}>
@@ -391,7 +440,7 @@ export default function BookingsPage() {
                   {!showCancel ? (
                     <button
                       onClick={() => {
-                        if (checkoutPassed(selected.checkout)) {
+                        if (checkoutPassed(selected)) {
                           showToast('Booking cannot be cancelled — checkout date has passed')
                           return
                         }
@@ -399,7 +448,7 @@ export default function BookingsPage() {
                       }}
                       style={{
                         ...btnOutline, color: '#C0392B', borderColor: '#C0392B', width: '100%',
-                        ...(checkoutPassed(selected.checkout) ? { opacity: 0.45, cursor: 'not-allowed' } : {}),
+                        ...(checkoutPassed(selected) ? { opacity: 0.45, cursor: 'not-allowed' } : {}),
                       }}
                     >
                       ✕ Cancel Booking

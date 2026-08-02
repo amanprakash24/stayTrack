@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
   const fromParam = searchParams.get('from')
   const toParam = searchParams.get('to')
   const hotelId = searchParams.get('hotelId') || undefined
+  const hotelFilter = hotelId ? { legs: { some: { hotelId } } } : {}
 
   let fromDate: Date
   let toDate: Date
@@ -33,9 +34,9 @@ export async function GET(req: NextRequest) {
 
   const [bookings, cancelledInPeriod, expenses, hotels] = await Promise.all([
     prisma.booking.findMany({
-      where: { createdAt: { gte: fromDate, lte: toDate }, hotelId },
+      where: { createdAt: { gte: fromDate, lte: toDate }, ...hotelFilter },
       include: {
-        hotel: { select: { id: true, location: true, name: true } },
+        legs: { include: { hotel: { select: { id: true, location: true, name: true } } }, orderBy: { order: 'asc' } },
         createdBy: { select: { name: true } },
         payments: { select: { amount: true } },
       },
@@ -43,8 +44,8 @@ export async function GET(req: NextRequest) {
     }),
     // Cancelled during the period (may have been created earlier)
     prisma.booking.findMany({
-      where: { cancelled: true, cancelledAt: { gte: fromDate, lte: toDate }, hotelId },
-      select: { id: true, hotelId: true, refundAmount: true },
+      where: { cancelled: true, cancelledAt: { gte: fromDate, lte: toDate }, ...hotelFilter },
+      select: { id: true, refundAmount: true, legs: { select: { hotelId: true }, orderBy: { order: 'asc' } } },
     }),
     prisma.expense.findMany({
       where: { date: { gte: fromDate, lte: toDate }, hotelId },
@@ -65,6 +66,16 @@ export async function GET(req: NextRequest) {
   const paidOf = (b: { advance: number; payments: { amount: number }[] }) =>
     b.advance + b.payments.reduce((s, p) => s + p.amount, 0)
 
+  // A booking's total cost may span several hotels; a shared payment is allocated to
+  // each hotel in proportion to that hotel's share of the booking's total cost.
+  const hotelShareOf = (booking: { legs: { hotelId: string; totalCost: number }[] }, hId: string) =>
+    booking.legs.filter((l) => l.hotelId === hId).reduce((s, l) => s + l.totalCost, 0)
+  const paidAllocatedTo = (
+    booking: { legs: { hotelId: string; totalCost: number }[]; totalCost: number },
+    hId: string,
+    paid: number
+  ) => (booking.totalCost > 0 ? paid * (hotelShareOf(booking, hId) / booking.totalCost) : 0)
+
   // Monthly buckets between fromDate and toDate
   const monthMap: Record<string, { revenue: number; bookings: number; collected: number; expenses: number }> = {}
   const cursor = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1)
@@ -76,6 +87,8 @@ export async function GET(req: NextRequest) {
   }
 
   const activeBookings = bookings.filter(b => !b.cancelled)
+  // One row per hotel stay — the natural unit for occupancy/revenue-by-hotel.
+  const legRows = activeBookings.flatMap(b => b.legs.map(l => ({ ...l, booking: b })))
 
   activeBookings.forEach(b => {
     const key = new Date(b.createdAt).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
@@ -92,9 +105,9 @@ export async function GET(req: NextRequest) {
   })
 
   const locationMap: Record<string, number> = {}
-  activeBookings.forEach(b => {
-    const loc = b.hotel.location
-    locationMap[loc] = (locationMap[loc] ?? 0) + b.totalCost
+  legRows.forEach(l => {
+    const loc = l.hotel.location
+    locationMap[loc] = (locationMap[loc] ?? 0) + l.totalCost
   })
 
   const partnerMap: Record<string, number> = {}
@@ -112,21 +125,24 @@ export async function GET(req: NextRequest) {
 
   // Per-hotel breakdown
   const hotelSummary = hotels.map(h => {
-    const hb = activeBookings.filter(b => b.hotel.id === h.id)
-    const income = bookings.filter(b => b.hotel.id === h.id).reduce((s, b) => s + paidOf(b), 0)
+    const hotelLegs = legRows.filter(l => l.hotelId === h.id)
+    const income = bookings.reduce((s, b) => s + paidAllocatedTo(b, h.id, paidOf(b)), 0)
     const exp = expenses.filter(e => e.hotel.id === h.id).reduce((s, e) => s + e.amount, 0)
-    const cancelled = cancelledInPeriod.filter(b => b.hotelId === h.id)
+    const refundTotal = expenses
+      .filter(e => e.category === 'Refund' && e.hotel.id === h.id)
+      .reduce((s, e) => s + e.amount, 0)
+    const cancelledCount = cancelledInPeriod.filter(b => b.legs[0]?.hotelId === h.id).length
     return {
       hotelId: h.id,
       name: h.name,
       location: h.location,
-      bookings: hb.length,
-      revenue: hb.reduce((s, b) => s + b.totalCost, 0),
+      bookings: hotelLegs.length,
+      revenue: hotelLegs.reduce((s, l) => s + l.totalCost, 0),
       income,
       expenses: exp,
       net: income - exp,
-      cancelledCount: cancelled.length,
-      refundTotal: cancelled.reduce((s, b) => s + b.refundAmount, 0),
+      cancelledCount,
+      refundTotal,
     }
   })
 
@@ -145,22 +161,25 @@ export async function GET(req: NextRequest) {
       refunds: totalRefunds,
     },
     hotelSummary,
-    rawBookings: bookings.map(b => ({
+    rawBookings: bookings.flatMap(b => b.legs.map(l => ({
       bookingRef: b.bookingRef,
       guestName: b.guestName,
       phone: b.phone,
-      location: b.hotel.location,
-      hotel: b.hotel.name,
-      totalCost: b.totalCost,
+      legNo: l.order + 1,
+      totalLegs: b.legs.length,
+      location: l.hotel.location,
+      hotel: l.hotel.name,
+      legTotalCost: l.totalCost,
+      bookingTotalCost: b.totalCost,
       advance: b.advance,
       paid: paidOf(b),
       pending: b.cancelled ? 0 : Math.max(0, b.totalCost - paidOf(b)),
       status: b.cancelled ? 'CANCELLED' : b.status,
-      checkin: b.checkin,
-      checkout: b.checkout,
+      checkin: l.checkin,
+      checkout: l.checkout,
       createdBy: b.bookedBy ?? b.createdBy.name,
-      planType: b.planType,
-    })),
+      planType: l.planType,
+    }))),
     rawExpenses: expenses.map(e => ({
       date: e.date,
       hotel: e.hotel.name,

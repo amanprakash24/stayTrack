@@ -1,16 +1,21 @@
 'use client'
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import { fmtINR, fmtDate, nightsBetween, getPlanLabel } from '@/lib/utils'
 import { showToast } from '@/components/Toast'
 import { useAppName, useAppSubName } from '@/components/AppNameProvider'
 
 interface Payment { amount: number }
+interface Leg {
+  id: string; order: number
+  hotel: { name: string; location: string; managerName?: string | null; managerPhone?: string | null }
+  checkin: string; checkout: string
+  planType: string; roomType?: string | null; guests: number; childGuests?: number; childRate?: number; rooms: number; ratePerUnit: number
+  subtotal: number; taxPercent: number; taxAmount: number
+}
 interface Booking {
   id: string; bookingRef: string; guestName: string; phone: string; email?: string;
-  hotel: { name: string; location: string; managerName?: string | null; managerPhone?: string | null };
-  checkin: string; checkout: string;
-  planType: string; roomType?: string | null; guests: number; childGuests?: number; childRate?: number; rooms: number; ratePerUnit: number;
-  subtotal: number; taxPercent: number; taxAmount: number; totalCost: number;
+  legs: Leg[];
+  subtotal: number; taxAmount: number; totalCost: number;
   advance: number; payments: Payment[];
   cancelled?: boolean; refundAmount?: number;
   notes?: string | null;
@@ -32,10 +37,9 @@ export default function BillModal({ booking: b, paid, pending, onClose, onEditBo
   const [gstNo, setGstNo] = useState('')
   const [editing, setEditing] = useState(false)
 
-  const nights = nightsBetween(b.checkin, b.checkout)
+  const legs = [...b.legs].sort((x, y) => x.order - y.order)
   const invNo = 'INV-' + b.bookingRef
-  // Child charge is included in subtotal; split it back out as its own line item
-  const childAmount = (b.childGuests ?? 0) * (b.childRate ?? 0) * nights
+  const hotelNames = [...new Set(legs.map(l => l.hotel.name))].join(' & ')
 
   function downloadBill() {
     // Exit edit mode and let React repaint (drops the gold border/caret) before capturing
@@ -71,10 +75,12 @@ export default function BillModal({ booking: b, paid, pending, onClose, onEditBo
     }
   }
 
-  const roomTypeLabel = b.roomType ? ` (${b.roomType === 'DELUXE' ? 'Deluxe AC' : 'Standard Non-AC'})` : ''
-  const rateLabel = ['AP','MAP','CP'].includes(b.planType)
-    ? `${b.guests} person${b.guests > 1 ? 's' : ''} x ${rs(b.ratePerUnit)}/head x ${nights} night${nights > 1 ? 's' : ''}${roomTypeLabel} · ${b.rooms} room${b.rooms > 1 ? 's' : ''}`
-    : `${b.rooms} room${b.rooms > 1 ? 's' : ''}${roomTypeLabel} x ${rs(b.ratePerUnit)}/room x ${nights} night${nights > 1 ? 's' : ''}`
+  function legRateLabel(l: Leg, nights: number) {
+    const roomTypeLabel = l.roomType ? ` (${l.roomType === 'DELUXE' ? 'Deluxe AC' : 'Standard Non-AC'})` : ''
+    return ['AP', 'MAP', 'CP'].includes(l.planType)
+      ? `${l.guests} person${l.guests > 1 ? 's' : ''} x ${rs(l.ratePerUnit)}/head x ${nights} night${nights > 1 ? 's' : ''}${roomTypeLabel} · ${l.rooms} room${l.rooms > 1 ? 's' : ''}`
+      : `${l.rooms} room${l.rooms > 1 ? 's' : ''}${roomTypeLabel} x ${rs(l.ratePerUnit)}/room x ${nights} night${nights > 1 ? 's' : ''}`
+  }
 
   if (step === 'gst') {
     return (
@@ -164,16 +170,29 @@ export default function BillModal({ booking: b, paid, pending, onClose, onEditBo
                 <div style={{ color: '#718096' }}>Ph: {b.phone}</div>
                 {b.email && <div style={{ color: '#718096' }}>{b.email}</div>}
               </div>
-              <div>
-                <div style={{ fontWeight: 700, color: '#4A5568', marginBottom: '4px', fontSize: '11px', textTransform: 'uppercase' }}>Property</div>
-                <div style={{ fontWeight: 600 }}>{b.hotel.name}</div>
-                <div style={{ color: '#718096' }}>{b.hotel.location}</div>
-                {b.hotel.managerName && <div style={{ color: '#718096' }}>Manager: {b.hotel.managerName}</div>}
-                {b.hotel.managerPhone && <div style={{ color: '#718096' }}>Manager Ph: {b.hotel.managerPhone}</div>}
-                <div style={{ color: '#718096' }}>Check-in: {fmtDate(b.checkin)}</div>
-                <div style={{ color: '#718096' }}>Check-out: {fmtDate(b.checkout)}</div>
-                <div style={{ color: '#718096' }}>Rooms: {b.rooms}</div>
-              </div>
+              {legs.length === 1 ? (
+                <div>
+                  <div style={{ fontWeight: 700, color: '#4A5568', marginBottom: '4px', fontSize: '11px', textTransform: 'uppercase' }}>Property</div>
+                  <div style={{ fontWeight: 600 }}>{legs[0].hotel.name}</div>
+                  <div style={{ color: '#718096' }}>{legs[0].hotel.location}</div>
+                  {legs[0].hotel.managerName && <div style={{ color: '#718096' }}>Manager: {legs[0].hotel.managerName}</div>}
+                  {legs[0].hotel.managerPhone && <div style={{ color: '#718096' }}>Manager Ph: {legs[0].hotel.managerPhone}</div>}
+                  <div style={{ color: '#718096' }}>Check-in: {fmtDate(legs[0].checkin)}</div>
+                  <div style={{ color: '#718096' }}>Check-out: {fmtDate(legs[0].checkout)}</div>
+                  <div style={{ color: '#718096' }}>Rooms: {legs[0].rooms}</div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontWeight: 700, color: '#4A5568', marginBottom: '4px', fontSize: '11px', textTransform: 'uppercase' }}>Itinerary</div>
+                  <div style={{ color: '#718096', marginBottom: '4px' }}>{fmtDate(legs[0].checkin)} → {fmtDate(legs[legs.length - 1].checkout)}</div>
+                  {legs.map((l, i) => (
+                    <div key={l.id} style={{ marginBottom: '3px' }}>
+                      <span style={{ fontWeight: 600 }}>{i + 1}. {l.hotel.name}</span>
+                      <span style={{ color: '#718096' }}> · {l.hotel.location} · {fmtDate(l.checkin)}–{fmtDate(l.checkout)} · {l.rooms} room{l.rooms > 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Line items */}
@@ -186,30 +205,38 @@ export default function BillModal({ booking: b, paid, pending, onClose, onEditBo
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#4A5568' }}>
-                    Accommodation · {b.hotel.name}<br />
-                    <span style={{ fontSize: '11px', color: '#718096' }}>{rateLabel}</span>
-                  </td>
-                  <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#4A5568', fontSize: '11px' }}>{getPlanLabel(b.planType)}</td>
-                  <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', textAlign: 'right', fontWeight: 600 }}>{rs(b.subtotal - childAmount)}</td>
-                </tr>
-                {childAmount > 0 && (
-                  <tr>
-                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#4A5568' }}>
-                      Children<br />
-                      <span style={{ fontSize: '11px', color: '#718096' }}>{b.childGuests} child{(b.childGuests ?? 0) > 1 ? 'ren' : ''} x {rs(b.childRate ?? 0)}/day x {nights} night{nights > 1 ? 's' : ''}</span>
-                    </td>
-                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC' }} />
-                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', textAlign: 'right', fontWeight: 600 }}>{rs(childAmount)}</td>
-                  </tr>
-                )}
-                {b.taxPercent > 0 && (
-                  <tr>
-                    <td colSpan={2} style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#718096', fontSize: '11px' }}>GST / Tax ({b.taxPercent}%)</td>
-                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', textAlign: 'right', color: '#718096' }}>{rs(b.taxAmount)}</td>
-                  </tr>
-                )}
+                {legs.map(l => {
+                  const nights = nightsBetween(l.checkin, l.checkout)
+                  const childAmount = (l.childGuests ?? 0) * (l.childRate ?? 0) * nights
+                  return (
+                    <Fragment key={l.id}>
+                      <tr>
+                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#4A5568' }}>
+                          Accommodation · {l.hotel.name}<br />
+                          <span style={{ fontSize: '11px', color: '#718096' }}>{legRateLabel(l, nights)}</span>
+                        </td>
+                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#4A5568', fontSize: '11px' }}>{getPlanLabel(l.planType)}</td>
+                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', textAlign: 'right', fontWeight: 600 }}>{rs(l.subtotal - childAmount)}</td>
+                      </tr>
+                      {childAmount > 0 && (
+                        <tr>
+                          <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#4A5568' }}>
+                            Children · {l.hotel.name}<br />
+                            <span style={{ fontSize: '11px', color: '#718096' }}>{l.childGuests} child{(l.childGuests ?? 0) > 1 ? 'ren' : ''} x {rs(l.childRate ?? 0)}/day x {nights} night{nights > 1 ? 's' : ''}</span>
+                          </td>
+                          <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC' }} />
+                          <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', textAlign: 'right', fontWeight: 600 }}>{rs(childAmount)}</td>
+                        </tr>
+                      )}
+                      {l.taxPercent > 0 && (
+                        <tr>
+                          <td colSpan={2} style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', color: '#718096', fontSize: '11px' }}>GST / Tax · {l.hotel.name} ({l.taxPercent}%)</td>
+                          <td style={{ padding: '8px 10px', borderBottom: '1px solid #EAF0EC', textAlign: 'right', color: '#718096' }}>{rs(l.taxAmount)}</td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
 
@@ -239,7 +266,7 @@ export default function BillModal({ booking: b, paid, pending, onClose, onEditBo
             )}
 
             <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #EAF0EC', fontSize: '11px', color: '#718096', textAlign: 'center' }}>
-              Thank you for choosing {b.hotel.name}! | Generated by {appName} | Ref: {b.bookingRef}
+              Thank you for choosing {hotelNames}! | Generated by {appName} | Ref: {b.bookingRef}
             </div>
           </div>
 

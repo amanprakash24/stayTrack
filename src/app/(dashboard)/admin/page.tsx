@@ -28,9 +28,12 @@ interface CleanupPayment {
   bookingRef: string; guestName: string; amount: number;
   mode?: string | null; receivedBy?: string | null; note?: string | null; date: string
 }
+interface CleanupLeg {
+  hotel: string; location: string; checkin: string; checkout: string; planType: string;
+  guests: number; rooms: number; totalCost: number
+}
 interface CleanupBooking {
-  bookingRef: string; guestName: string; phone: string; hotel: string; location: string;
-  checkin: string; checkout: string; planType: string; guests: number; rooms: number;
+  bookingRef: string; guestName: string; phone: string; legs: CleanupLeg[];
   totalCost: number; advance: number; totalPaid: number; status: string;
   refundAmount: number; bookedBy?: string; createdBy: string; notes?: string | null; payments: CleanupPayment[]
 }
@@ -205,18 +208,20 @@ export default function AdminPage() {
     const { utils, writeFile } = await import('xlsx')
     const wb = utils.book_new()
 
-    utils.book_append_sheet(wb, utils.json_to_sheet(r.bookings.map(b => ({
+    utils.book_append_sheet(wb, utils.json_to_sheet(r.bookings.flatMap(b => b.legs.map((l, i) => ({
       'Booking Ref': b.bookingRef,
+      'Stay': b.legs.length > 1 ? `${i + 1} of ${b.legs.length}` : '1 of 1',
       'Guest Name': b.guestName,
       'Phone': b.phone,
-      'Hotel': b.hotel,
-      'Location': b.location,
-      'Check-in': String(b.checkin).slice(0, 10),
-      'Check-out': String(b.checkout).slice(0, 10),
-      'Plan': b.planType,
-      'Guests': b.guests,
-      'Rooms': b.rooms,
-      'Total Cost': b.totalCost,
+      'Hotel': l.hotel,
+      'Location': l.location,
+      'Check-in': String(l.checkin).slice(0, 10),
+      'Check-out': String(l.checkout).slice(0, 10),
+      'Plan': l.planType,
+      'Guests': l.guests,
+      'Rooms': l.rooms,
+      'Stay Cost': l.totalCost,
+      'Booking Total': b.totalCost,
       'Advance': b.advance,
       'Total Paid': b.totalPaid,
       'Status': b.status,
@@ -224,7 +229,7 @@ export default function AdminPage() {
       'Booked By': b.bookedBy ?? '',
       'Created By': b.createdBy,
       'Notes': b.notes ?? '',
-    }))), 'Bookings')
+    })))), 'Bookings')
 
     utils.book_append_sheet(wb, utils.json_to_sheet(r.bookings.flatMap(b => b.payments).map(p => ({
       'Booking Ref': p.bookingRef,
@@ -894,12 +899,16 @@ export default function AdminPage() {
                     <>
                       <div style={cleanListTitle}>Bookings</div>
                       <div style={cleanList}>
-                        {cleanPreview.records!.bookings.slice(0, 50).map(b => (
-                          <div key={b.bookingRef} style={cleanListRow}>
-                            <span style={{ fontWeight: 600 }}>{b.bookingRef}</span> · {b.guestName} · {b.hotel.trim()}
-                            <span style={{ color: '#718096' }}> · {String(b.checkin).slice(0, 10)} → {String(b.checkout).slice(0, 10)} · ₹{b.totalCost.toLocaleString('en-IN')} · {b.status}</span>
-                          </div>
-                        ))}
+                        {cleanPreview.records!.bookings.slice(0, 50).map(b => {
+                          const first = b.legs[0]
+                          const last = b.legs[b.legs.length - 1]
+                          return (
+                            <div key={b.bookingRef} style={cleanListRow}>
+                              <span style={{ fontWeight: 600 }}>{b.bookingRef}</span> · {b.guestName} · {first.hotel.trim()}{b.legs.length > 1 ? ` +${b.legs.length - 1} more` : ''}
+                              <span style={{ color: '#718096' }}> · {String(first.checkin).slice(0, 10)} → {String(last.checkout).slice(0, 10)} · ₹{b.totalCost.toLocaleString('en-IN')} · {b.status}</span>
+                            </div>
+                          )
+                        })}
                         {cleanPreview.records!.bookings.length > 50 && (
                           <div style={{ ...cleanListRow, color: '#718096' }}>…and {cleanPreview.records!.bookings.length - 50} more (all included in the Excel backup)</div>
                         )}

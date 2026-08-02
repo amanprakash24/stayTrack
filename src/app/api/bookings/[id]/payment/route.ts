@@ -12,10 +12,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const booking = await prisma.booking.findUnique({
     where: { id },
-    include: { payments: true },
+    include: { payments: true, legs: { select: { hotelId: true } } },
   })
   if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (session.role === 'STAFF' && booking.hotelId !== session.hotelId) {
+  if (session.role === 'STAFF' && !booking.legs.some((l) => l.hotelId === session.hotelId)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   if (booking.cancelled) return NextResponse.json({ error: 'Booking is cancelled' }, { status: 400 })

@@ -26,13 +26,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const booking = await prisma.booking.findUnique({
     where: { id },
-    include: { payments: true },
+    include: { payments: true, legs: { orderBy: { order: 'asc' } } },
   })
   if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (booking.cancelled) return NextResponse.json({ error: 'Booking already cancelled' }, { status: 400 })
+  if (!booking.legs.length) return NextResponse.json({ error: 'Booking has no stays' }, { status: 400 })
 
-  // Cancellation is allowed until the end of the checkout day
-  const checkoutEnd = new Date(booking.checkout)
+  // The reservation isn't over until its last stay ends, so cancellation is allowed
+  // until the end of the LAST leg's checkout day.
+  const lastCheckout = new Date(Math.max(...booking.legs.map((l) => l.checkout.getTime())))
+  const checkoutEnd = new Date(lastCheckout)
   checkoutEnd.setHours(23, 59, 59, 999)
   if (new Date() > checkoutEnd) {
     return NextResponse.json({ error: 'Booking cannot be cancelled — checkout date has passed' }, { status: 400 })
@@ -72,12 +75,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   })
 
-  // Refund automatically reflects as a hotel expense
+  // Refund automatically reflects as a hotel expense — attributed to the first
+  // stay's hotel (same anchor used for the booking reference).
   if (refund > 0) {
     await prisma.expense.create({
       data: {
         date: cancelledAt,
-        hotelId: booking.hotelId,
+        hotelId: booking.legs[0].hotelId,
         category: 'Refund',
         description: `Refund for cancelled booking ${booking.bookingRef} (${booking.guestName})`,
         amount: refund,
