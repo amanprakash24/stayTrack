@@ -26,23 +26,28 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
 
   const [step, setStep] = useState<'input' | 'bill'>('input')
   const [rows, setRows] = useState(() => legs.map(l => ({
-    legId: l.id, fee: l.hotel.tourismFee ? String(l.hotel.tourismFee) : '', guests: String(l.guests),
+    legId: l.id, included: true, fee: l.hotel.tourismFee ? String(l.hotel.tourismFee) : '', guests: String(l.guests),
   })))
   const [gstNo, setGstNo] = useState('')
   const [editing, setEditing] = useState(false)
 
-  const computed = rows.map((r, i) => ({ legId: r.legId, leg: legs[i], fee: Number(r.fee) || 0, guests: Number(r.guests) || 0 }))
-  const total = computed.reduce((s, r) => s + r.fee * r.guests, 0)
+  const computed = rows.map((r, i) => ({ legId: r.legId, leg: legs[i], included: r.included, fee: Number(r.fee) || 0, guests: Number(r.guests) || 0 }))
+  const includedRows = computed.filter(r => r.included)
+  const total = includedRows.reduce((s, r) => s + r.fee * r.guests, 0)
   const billNo = 'TF-' + b.bookingRef
-  const hotelNames = [...new Set(legs.map(l => l.hotel.name))].join(' & ')
+  const hotelNames = [...new Set(includedRows.map(r => r.leg.hotel.name))].join(' & ') || [...new Set(legs.map(l => l.hotel.name))].join(' & ')
 
   function setRow(i: number, field: 'fee' | 'guests', value: string) {
     setRows(rs2 => rs2.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)))
   }
+  function toggleRow(i: number) {
+    setRows(rs2 => rs2.map((r, idx) => (idx === i ? { ...r, included: !r.included } : r)))
+  }
 
   function generate() {
-    if (computed.some(r => !r.fee || r.fee <= 0)) { showToast('Enter the fee per guest for every stay'); return }
-    if (computed.some(r => !r.guests || r.guests <= 0)) { showToast('Enter number of people for every stay'); return }
+    if (includedRows.length === 0) { showToast('Include at least one stay'); return }
+    if (includedRows.some(r => !r.fee || r.fee <= 0)) { showToast('Enter the fee per guest for every included stay'); return }
+    if (includedRows.some(r => !r.guests || r.guests <= 0)) { showToast('Enter number of people for every included stay'); return }
     setStep('bill')
   }
 
@@ -78,8 +83,13 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
           </div>
 
           {legs.map((l, i) => (
-            <div key={l.id} style={{ marginBottom: '14px', paddingBottom: '14px', borderBottom: i < legs.length - 1 ? '1px solid #EAF0EC' : 'none' }}>
-              {legs.length > 1 && <div style={{ fontSize: '12px', fontWeight: 700, color: '#1B3A2D', marginBottom: '8px' }}>{i + 1}. {l.hotel.name} · {l.hotel.location}</div>}
+            <div key={l.id} style={{ marginBottom: '14px', paddingBottom: '14px', borderBottom: i < legs.length - 1 ? '1px solid #EAF0EC' : 'none', opacity: rows[i].included ? 1 : 0.5 }}>
+              {legs.length > 1 && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 700, color: '#1B3A2D', marginBottom: '8px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={rows[i].included} onChange={() => toggleRow(i)} style={{ width: '16px', height: '16px', accentColor: '#1B3A2D', cursor: 'pointer' }} />
+                  {i + 1}. {l.hotel.name} · {l.hotel.location}
+                </label>
+              )}
               <div style={{ marginBottom: '10px' }}>
                 <label style={inputLbl}>Fee Per Guest (₹) *</label>
                 <input
@@ -89,6 +99,7 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
                   placeholder="e.g. 50"
                   value={rows[i].fee}
                   onChange={e => setRow(i, 'fee', e.target.value)}
+                  disabled={!rows[i].included}
                   autoFocus={i === 0}
                 />
               </div>
@@ -101,6 +112,7 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
                   placeholder="e.g. 2"
                   value={rows[i].guests}
                   onChange={e => setRow(i, 'guests', e.target.value)}
+                  disabled={!rows[i].included}
                 />
               </div>
             </div>
@@ -208,6 +220,12 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
               )}
             </div>
 
+            {includedRows.length < legs.length && (
+              <div style={{ fontSize: '11px', color: '#718096', marginBottom: '10px' }}>
+                State tourism fee charged for {includedRows.length} of {legs.length} stays (others already covered / not applicable).
+              </div>
+            )}
+
             {/* Fee table */}
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '16px' }}>
               <thead>
@@ -219,7 +237,7 @@ export default function TourismBillModal({ booking: b, onClose }: { booking: Boo
                 </tr>
               </thead>
               <tbody>
-                {computed.map(r => (
+                {includedRows.map(r => (
                   <tr key={r.legId}>
                     <td style={{ ...td, textAlign: 'left' }}>State Tourism Fee ({r.leg.hotel.location.trim()}) - one-time</td>
                     <td style={td}>{r.guests}</td>
